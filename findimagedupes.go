@@ -108,19 +108,21 @@ func main() {
 	}
 
 	// Find similar hashes.
-	hashes := make([]uint64, 0, len(hmap))
-	for h := range hmap {
-		hashes = append(hashes, h)
-	}
-	for i := 0; i < len(hashes)-1; i++ {
-		for j := i + 1; j < len(hashes); j++ {
-			h1 := hashes[i]
-			h2 := hashes[j]
+	if *threshold > 0 {
+		hashes := make([]uint64, 0, len(hmap))
+		for h := range hmap {
+			hashes = append(hashes, h)
+		}
+		for i := 0; i < len(hashes)-1; i++ {
+			for j := i + 1; j < len(hashes); j++ {
+				h1 := hashes[i]
+				h2 := hashes[j]
 
-			d := phash.HammingDistance(h1, h2)
-			if d <= *threshold {
-				hmap[h1] = append(hmap[h1], hmap[h2]...)
-				delete(hmap, h2)
+				d := phash.HammingDistance(h1, h2)
+				if d <= *threshold {
+					hmap[h1] = append(hmap[h1], hmap[h2]...)
+					delete(hmap, h2)
+				}
 			}
 		}
 	}
