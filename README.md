@@ -1,7 +1,7 @@
 findimagedupes
 ==============
 
-findimagedupes finds visually similar images or duplicate images.
+findimagedupes finds visually similar or duplicate images.
 
 # Install
 
