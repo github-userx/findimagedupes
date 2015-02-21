@@ -90,7 +90,7 @@ func ProcessFile(path string, info os.FileInfo, err error) error {
 func main() {
 	log.SetFlags(0)
 
-	flag.Var(&viewerArgs, "a", `A viewer argument; you can specify multiple arguments, e.g. -a -. -a -^ -a "[%u / %l] [%wx%h] %n"`)
+	flag.Var(&viewerArgs, "a", `A viewer argument; you can specify multiple arguments, e.g. for feh, -a -. -a -^ -a "%u / %l - %wx%h - %n"`)
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "Usage: findimagedupes [options] directory [directory...]")
 		flag.PrintDefaults()
