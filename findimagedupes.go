@@ -107,7 +107,7 @@ func main() {
 		filepath.Walk(d, ProcessFile)
 	}
 
-	// Find similar images.
+	// Find similar hashes.
 	hashes := make([]uint64, 0, len(hmap))
 	for h := range hmap {
 		hashes = append(hashes, h)
