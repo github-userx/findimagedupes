@@ -5,6 +5,8 @@ findimagedupes finds visually similar or duplicate images.
 
 # Install
 
+You need [pHash](http://www.phash.org/) library installed. Then
+
     go get github.com/opennota/findimagedupes
 
 # Usage
