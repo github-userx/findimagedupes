@@ -108,11 +108,14 @@ func main() {
 	}
 
 	// Find similar images.
-	for h1 := range hmap {
-		for h2 := range hmap {
-			if h1 == h2 {
-				continue
-			}
+	hashes := make([]uint64, 0, len(hmap))
+	for h := range hmap {
+		hashes = append(hashes, h)
+	}
+	for i := 0; i < len(hashes)-1; i++ {
+		for j := i + 1; j < len(hashes); j++ {
+			h1 := hashes[i]
+			h2 := hashes[j]
 
 			d := phash.HammingDistance(h1, h2)
 			if d <= *threshold {
