@@ -29,10 +29,10 @@ import (
 )
 
 var (
-	quiet      = flag.Bool("q", false, "Quiet mode (no warnings)")
-	threshold  = flag.Int("t", 0, "Hamming distance threshold")
-	viewer     = flag.String("v", "", `Image viewer, e.g. -v feh; if no viewer is specified (default), findimagedupes will print similar files to the standard output`)
-	viewerArgs StringSlice
+	quiet     = flag.Bool("q", false, "Quiet mode (no warnings)")
+	threshold = flag.Int("t", 0, "Hamming distance threshold (0..64)")
+	viewer    = flag.String("v", "", `Image viewer, e.g. -v feh; if no viewer is specified (default), findimagedupes will print similar files to the standard output`)
+	vargs     = flag.String("args", "", `Image viewer arguments; e.g. for feh, -args '-. -^ "%u / %l - %wx%h - %n"'`)
 
 	mm, _ = magicmime.New(magicmime.MAGIC_MIME_TYPE | magicmime.MAGIC_SYMLINK | magicmime.MAGIC_ERROR)
 	hmap  = make(map[uint64][]string)
@@ -91,7 +91,6 @@ func ProcessFile(path string, info os.FileInfo, err error) error {
 func main() {
 	log.SetFlags(0)
 
-	flag.Var(&viewerArgs, "a", `A viewer argument; you can specify multiple arguments, e.g. for feh, -a -. -a -^ -a "%u / %l - %wx%h - %n"`)
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "Usage: findimagedupes [options] directory [directory...]")
 		flag.PrintDefaults()
@@ -102,6 +101,8 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
+
+	viewerArgs := parseArgs(*vargs)
 
 	// Search for image files and compute hashes.
 	for _, d := range flag.Args() {

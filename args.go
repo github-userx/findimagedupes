@@ -14,19 +14,60 @@
 package main
 
 import (
-	"strings"
+	"bytes"
 )
 
-// StringSlice is a custom flag that implements flag.Value interface.
-// It can be specified multiple times on the command line and collects
-// all the values in a slice.
-type StringSlice []string
+func parseArgs(s string) (args []string) {
+	quoted := false
+	canStartQuoted := true
+	var quote byte
+	var buf bytes.Buffer
 
-func (a *StringSlice) Set(val string) error {
-	*a = append(*a, val)
-	return nil
-}
+	for i := 0; i < len(s); i++ {
+		b := s[i]
+		switch b {
+		case '"', '\'':
+			if quoted {
+				if b == quote {
+					quoted = false
+				} else {
+					buf.WriteByte(b)
+				}
+			} else if canStartQuoted {
+				quoted = true
+				quote = b
+			} else {
+				buf.WriteByte(b)
+			}
+		case ' ':
+			if quoted {
+				buf.WriteByte(' ')
+			} else {
+				canStartQuoted = true
+				if buf.Len() > 0 {
+					args = append(args, buf.String())
+				}
+				buf.Reset()
+				for i+1 < len(s) && s[i+1] == ' ' {
+					i++
+				}
+			}
+		case '\\':
+			if i+1 < len(s) && (s[i+1] == '"' || s[i+1] == '\'') {
+				b = s[i+1]
+				i++
+			}
 
-func (a *StringSlice) String() string {
-	return strings.Join(*a, " ")
+			fallthrough
+		default:
+			buf.WriteByte(b)
+			canStartQuoted = false
+		}
+	}
+
+	if buf.Len() > 0 {
+		args = append(args, buf.String())
+	}
+
+	return
 }
