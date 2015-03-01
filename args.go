@@ -43,14 +43,14 @@ func parseArgs(s string) (args []string) {
 			if quoted {
 				buf.WriteByte(' ')
 			} else {
-				canStartQuoted = true
 				if buf.Len() > 0 {
 					args = append(args, buf.String())
+					buf.Reset()
 				}
-				buf.Reset()
 				for i+1 < len(s) && s[i+1] == ' ' {
 					i++
 				}
+				canStartQuoted = true
 			}
 		case '\\':
 			if i+1 < len(s) && (s[i+1] == '"' || s[i+1] == '\'') {
