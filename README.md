@@ -3,7 +3,7 @@ findimagedupes [![License](http://img.shields.io/:license-gpl3-blue.svg)](http:/
 
 findimagedupes finds visually similar or duplicate images.
 
-# Install
+# Installation
 
 You need [pHash](http://www.phash.org/) library installed. Then
 
