@@ -33,12 +33,13 @@ var (
 	threshold = flag.Int("t", 0, "Hamming distance threshold (0..64)")
 	viewer    = flag.String("v", "", `Image viewer, e.g. -v feh; if no viewer is specified (default), findimagedupes will print similar files to the standard output`)
 	vargs     = flag.String("args", "", `Image viewer arguments; e.g. for feh, -args '-. -^ "%u / %l - %wx%h - %n"'`)
+	cleanup   bool
 
 	mm, _ = magicmime.New(magicmime.MAGIC_MIME_TYPE | magicmime.MAGIC_SYMLINK | magicmime.MAGIC_ERROR)
 	hmap  = make(map[uint64][]string)
 )
 
-// ProcessFile computes a hash of the file if it is an image file,
+// ProcessFile computes a fingerprint of the file if it is an image file,
 // and saves it in the hmap map.
 func ProcessFile(path string, info os.FileInfo, err error) error {
 	if err != nil {
@@ -53,37 +54,43 @@ func ProcessFile(path string, info os.FileInfo, err error) error {
 		return nil
 	}
 
-	mimetype, err := mm.TypeByFile(path)
-	if err != nil {
-		if !*quiet {
-			log.Printf("WARNING: %s: %v", path, err)
+	abspath, _ := filepath.Abs(path)
+	fp, ok := Get(abspath, info)
+	if !ok {
+		mimetype, err := mm.TypeByFile(path)
+		if err != nil {
+			if !*quiet {
+				log.Printf("WARNING: %s: %v", path, err)
+			}
+
+			return nil
 		}
 
-		return nil
-	}
-
-	if !strings.HasPrefix(mimetype, "image/") {
-		return nil
-	}
-
-	hash, err := phash.ImageHashDCT(path)
-	if err != nil {
-		if !*quiet {
-			log.Printf("WARNING: %s: %v", path, err)
+		if !strings.HasPrefix(mimetype, "image/") {
+			return nil
 		}
 
-		return nil
-	}
+		fp, err = phash.ImageHashDCT(path)
+		if err != nil {
+			if !*quiet {
+				log.Printf("WARNING: %s: %v", path, err)
+			}
 
-	if hash == 0 {
-		if !*quiet {
-			log.Printf("WARNING: %s: cannot compute hash", path)
+			return nil
 		}
 
-		return nil
+		if fp == 0 {
+			if !*quiet {
+				log.Printf("WARNING: %s: cannot compute fingerprint", path)
+			}
+
+			return nil
+		}
+
+		Upsert(abspath, info, fp)
 	}
 
-	hmap[hash] = append(hmap[hash], path)
+	hmap[fp] = append(hmap[fp], path)
 
 	return nil
 }
@@ -97,7 +104,14 @@ func main() {
 	}
 	flag.Parse()
 
+	if cleanup {
+		Cleanup()
+	}
+
 	if len(flag.Args()) == 0 {
+		if cleanup {
+			os.Exit(0)
+		}
 		flag.Usage()
 		os.Exit(1)
 	}
