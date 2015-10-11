@@ -55,7 +55,7 @@ func ProcessFile(path string, info os.FileInfo, err error) error {
 	}
 
 	abspath, _ := filepath.Abs(path)
-	fp, ok := Get(abspath, info)
+	fp, ok := Get(abspath, info.ModTime())
 	if !ok {
 		mimetype, err := mm.TypeByFile(path)
 		if err != nil {
@@ -87,7 +87,7 @@ func ProcessFile(path string, info os.FileInfo, err error) error {
 			return nil
 		}
 
-		Upsert(abspath, info, fp)
+		Upsert(abspath, info.ModTime(), fp)
 	}
 
 	hmap[fp] = append(hmap[fp], path)

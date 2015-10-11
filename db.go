@@ -69,8 +69,8 @@ func iso8601(t time.Time) string {
 	return t.Format("2006-01-02 15:04:05")
 }
 
-func Get(path string, fi os.FileInfo) (uint64, bool) {
-	lastmod := iso8601(fi.ModTime())
+func Get(path string, modtime time.Time) (uint64, bool) {
+	lastmod := iso8601(modtime)
 	row := preparedGet.QueryRow(path, lastmod)
 	var fp int64
 	err := row.Scan(&fp)
@@ -87,8 +87,8 @@ func Get(path string, fi os.FileInfo) (uint64, bool) {
 	return uint64(fp), true
 }
 
-func Upsert(path string, fi os.FileInfo, fp uint64) {
-	lastmod := iso8601(fi.ModTime())
+func Upsert(path string, modtime time.Time, fp uint64) {
+	lastmod := iso8601(modtime)
 	_, err := preparedUpsert.Exec(path, int64(fp), lastmod)
 	if err != nil {
 		if !*quiet {

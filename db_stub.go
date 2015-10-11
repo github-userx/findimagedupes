@@ -2,10 +2,10 @@
 
 package main
 
-import "os"
+import "time"
 
-func Get(string, os.FileInfo) (uint64, bool) { return 0, false }
+func Get(string, time.Time) (uint64, bool) { return 0, false }
 
-func Upsert(string, os.FileInfo, uint64) {}
+func Upsert(string, time.Time, uint64) {}
 
 func Cleanup() {}
