@@ -1,4 +1,4 @@
-// +build !sqlite
+// +build nosqlite
 
 package main
 
