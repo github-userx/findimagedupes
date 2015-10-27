@@ -35,9 +35,16 @@ var (
 	vargs     = flag.String("args", "", `Image viewer arguments; e.g. for feh, -args '-. -^ "%u / %l - %wx%h - %n"'`)
 	cleanup   bool
 
-	mm, _ = magicmime.New(magicmime.MAGIC_MIME_TYPE | magicmime.MAGIC_SYMLINK | magicmime.MAGIC_ERROR)
-	hmap  = make(map[uint64][]string)
+	hmap = make(map[uint64][]string)
 )
+
+func init() {
+	err := magicmime.Open(magicmime.MAGIC_MIME_TYPE | magicmime.MAGIC_SYMLINK | magicmime.MAGIC_ERROR)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+}
 
 // ProcessFile computes a fingerprint of the file if it is an image file,
 // and saves it in the hmap map.
@@ -57,7 +64,7 @@ func ProcessFile(path string, info os.FileInfo, err error) error {
 	abspath, _ := filepath.Abs(path)
 	fp, ok := Get(abspath, info.ModTime())
 	if !ok {
-		mimetype, err := mm.TypeByFile(path)
+		mimetype, err := magicmime.TypeByFile(path)
 		if err != nil {
 			if !*quiet {
 				log.Printf("WARNING: %s: %v", path, err)
