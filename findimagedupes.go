@@ -34,8 +34,11 @@ var (
 	viewer    = flag.String("v", "", `Image viewer, e.g. -v feh; if no viewer is specified (default), findimagedupes will print similar files to the standard output`)
 	vargs     = flag.String("args", "", `Image viewer arguments; e.g. for feh, -args '-. -^ "%u / %l - %wx%h - %n"'`)
 	cleanup   bool
+	noSpinner = flag.Bool("no-spinner", false, "Don't show spinner")
 
 	hmap = make(map[uint64][]string)
+
+	spinner *Spinner
 )
 
 func init() {
@@ -63,7 +66,11 @@ func ProcessFile(path string, info os.FileInfo, err error) error {
 
 	abspath, _ := filepath.Abs(path)
 	fp, ok := Get(abspath, info.ModTime())
-	if !ok {
+	if ok {
+		if !*noSpinner {
+			spinner.Spin(path)
+		}
+	} else {
 		mimetype, err := magicmime.TypeByFile(path)
 		if err != nil {
 			if !*quiet {
@@ -75,6 +82,10 @@ func ProcessFile(path string, info os.FileInfo, err error) error {
 
 		if !strings.HasPrefix(mimetype, "image/") {
 			return nil
+		}
+
+		if !*noSpinner {
+			spinner.Spin(path)
 		}
 
 		fp, err = phash.ImageHashDCT(path)
@@ -125,10 +136,14 @@ func main() {
 
 	viewerArgs := parseArgs(*vargs)
 
+	spinner = NewSpinner()
+
 	// Search for image files and compute hashes.
 	for _, d := range flag.Args() {
 		filepath.Walk(d, ProcessFile)
 	}
+
+	spinner.Stop()
 
 	// Find similar hashes.
 	if *threshold > 0 {
