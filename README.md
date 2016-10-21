@@ -18,3 +18,7 @@ The same but use feh to display the duplicates.
     findimagedupes -v feh ~/Images
 
 If no arguments are specified, findimagedupes will print all the available arguments and their default values.
+
+# Also
+
+There is a [perl script](http://www.ostertag.name/HowTo/findimagedupes.shtml) by that name, which uses a different hashing algorithm.
