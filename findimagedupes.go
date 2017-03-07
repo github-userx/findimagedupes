@@ -228,6 +228,10 @@ func main() {
 
 	spinner.Stop()
 
+	if noCompare {
+		os.Exit(0)
+	}
+
 	// Find similar hashes.
 	if threshold > 0 {
 		hashes := make([]uint64, 0, len(hmap))
@@ -246,10 +250,6 @@ func main() {
 				}
 			}
 		}
-	}
-
-	if noCompare {
-		os.Exit(0)
 	}
 
 	// Print or view duplicates.
