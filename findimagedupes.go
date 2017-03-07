@@ -167,7 +167,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, `Usage: findimagedupes [options] [file...]
 
     Options:
-       -t, --threshold=AMOUNT         Use AMOUNT as threshold of similarity
+       -t, --threshold=AMOUNT         Use AMOUNT as threshold of similarity (0..64; default 0)
        -R, --recurse                  Search recursively for images inside subdirectories
        -n, --no-compare               Don't look for duplicates
        -p, --program=PROGRAM          Launch PROGRAM (in foreground) to view each set of dupes
