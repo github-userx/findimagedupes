@@ -15,7 +15,6 @@ package main
 
 import (
 	"database/sql"
-	"flag"
 	"log"
 	"os"
 	"time"
@@ -31,74 +30,68 @@ type entry struct {
 	lastmod string
 }
 
-var (
+type DB struct {
 	db             *sql.DB
 	preparedGet    *sql.Stmt
 	preparedUpsert *sql.Stmt
-)
+}
 
-func init() {
-	flag.BoolVar(&prune, "prune", false, "Remove fingerprint data for images that do not exist any more")
-
-	dbpath := os.ExpandEnv("$HOME/.findimagedupes.sqlite")
-	var err error
-	db, err = sql.Open("sqlite3", dbpath)
+func OpenDatabase(dbpath string) (*DB, error) {
+	db, err := sql.Open("sqlite3", dbpath)
 	if err != nil {
-		log.Fatalf("sql.Open: %v", err)
+		return nil, err
 	}
 
-	_, err = db.Exec("CREATE TABLE IF NOT EXISTS fingerprints (path TEXT PRIMARY KEY, fp INTEGER, lastmod DATETIME)")
-	if err != nil {
-		log.Fatal(err)
+	if _, err := db.Exec("CREATE TABLE IF NOT EXISTS fingerprints (path TEXT PRIMARY KEY, fp INTEGER, lastmod DATETIME)"); err != nil {
+		return nil, err
 	}
 
-	preparedGet, err = db.Prepare("SELECT fp FROM fingerprints WHERE path = ? AND lastmod = ?")
+	get, err := db.Prepare("SELECT fp FROM fingerprints WHERE path = ? AND lastmod = ?")
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
-	preparedUpsert, err = db.Prepare("INSERT OR REPLACE INTO fingerprints (path, fp, lastmod) VALUES (?, ?, ?)")
+	upsert, err := db.Prepare("INSERT OR REPLACE INTO fingerprints (path, fp, lastmod) VALUES (?, ?, ?)")
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
+
+	return &DB{
+		db:             db,
+		preparedGet:    get,
+		preparedUpsert: upsert,
+	}, nil
 }
 
 func iso8601(t time.Time) string {
 	return t.Format("2006-01-02 15:04:05")
 }
 
-func Get(path string, modtime time.Time) (uint64, bool) {
+func (db *DB) Get(path string, modtime time.Time) (uint64, bool, error) {
 	lastmod := iso8601(modtime)
-	row := preparedGet.QueryRow(path, lastmod)
+	row := db.preparedGet.QueryRow(path, lastmod)
 	var fp int64
 	err := row.Scan(&fp)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return 0, false
+			return 0, false, nil
 		}
-		if !*quiet {
-			log.Print(err)
-		}
-		return 0, false
+		return 0, false, err
 	}
 
-	return uint64(fp), true
+	return uint64(fp), true, nil
 }
 
-func Upsert(path string, modtime time.Time, fp uint64) {
+func (db *DB) Upsert(path string, modtime time.Time, fp uint64) error {
 	lastmod := iso8601(modtime)
-	_, err := preparedUpsert.Exec(path, int64(fp), lastmod)
-	if err != nil {
-		if !*quiet {
-			log.Print(err)
-		}
-	}
+	_, err := db.preparedUpsert.Exec(path, int64(fp), lastmod)
+	return err
 }
 
-func Prune() {
-	rows, err := db.Query("SELECT path, fp, lastmod FROM fingerprints")
+func (db *DB) Prune() error {
+	rows, err := db.db.Query("SELECT path, fp, lastmod FROM fingerprints")
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer rows.Close()
 
@@ -108,9 +101,8 @@ func Prune() {
 	var toDelete []string
 	var toUpdate []entry
 	for rows.Next() {
-		err := rows.Scan(&path, &fp, &tm)
-		if err != nil {
-			log.Fatal(err)
+		if err := rows.Scan(&path, &fp, &tm); err != nil {
+			return err
 		}
 
 		fi, err := os.Stat(path)
@@ -119,7 +111,7 @@ func Prune() {
 				toDelete = append(toDelete, path)
 				continue
 			}
-			log.Printf("os.Stat: %v", err)
+			log.Println("ERROR:", err)
 			continue
 		}
 
@@ -140,25 +132,24 @@ func Prune() {
 	}
 
 	if err := rows.Err(); err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	if len(toDelete) == 0 && len(toUpdate) == 0 {
-		return
+		return nil
 	}
 
-	tx, err := db.Begin()
+	tx, err := db.db.Begin()
 
 	if len(toDelete) > 0 {
 		stmt, err := tx.Prepare("DELETE FROM fingerprints WHERE path = ?")
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 
 		for _, path := range toDelete {
-			_, err := stmt.Exec(path)
-			if err != nil {
-				log.Print(err)
+			if _, err := stmt.Exec(path); err != nil {
+				return err
 			}
 		}
 	}
@@ -166,19 +157,20 @@ func Prune() {
 	if len(toUpdate) > 0 {
 		stmt, err := tx.Prepare("UPDATE fingerprints SET fp = ?, lastmod = ? WHERE path = ?")
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 
 		for _, entry := range toUpdate {
-			_, err := stmt.Exec(int64(entry.fp), entry.lastmod, entry.path)
-			if err != nil {
-				log.Print(err)
+			if _, err := stmt.Exec(int64(entry.fp), entry.lastmod, entry.path); err != nil {
+				return err
 			}
 		}
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		log.Print(err)
+		return err
 	}
+
+	return nil
 }

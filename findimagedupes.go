@@ -29,12 +29,16 @@ import (
 )
 
 var (
-	quiet     = flag.Bool("q", false, "Quiet mode (no warnings)")
-	threshold = flag.Int("t", 0, "Hamming distance threshold (0..64)")
-	viewer    = flag.String("v", "", `Image viewer, e.g. -v feh; if no viewer is specified (default), findimagedupes will print similar files to the standard output`)
-	vargs     = flag.String("args", "", `Image viewer arguments; e.g. for feh, -args '-. -^ "%u / %l - %wx%h - %n"'`)
-	prune     bool
-	noSpinner = flag.Bool("no-spinner", false, "Don't show spinner")
+	threshold   int
+	recurse     bool
+	noCompare   bool
+	program     string
+	programArgs string
+	dbPath      string
+	prune       bool
+	quiet       bool
+
+	db *DB
 
 	hmap = make(map[uint64][]string)
 
@@ -46,87 +50,161 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
 }
 
-// ProcessFile computes a fingerprint of the file if it is an image file,
-// and saves it in the hmap map.
-func ProcessFile(path string, info os.FileInfo, err error) error {
-	if err != nil {
-		if !*quiet {
-			log.Printf("WARNING: %s: %v", path, err)
-		}
-
-		return nil
-	}
-
-	if !info.Mode().IsRegular() {
-		return nil
-	}
-
-	abspath, _ := filepath.Abs(path)
-	fp, ok := Get(abspath, info.ModTime())
-	if ok {
-		if !*noSpinner {
-			spinner.Spin(path)
-		}
-	} else {
-		mimetype, err := magicmime.TypeByFile(path)
+func process(depth int) filepath.WalkFunc {
+	return func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			if !*quiet {
+			if !quiet {
 				log.Printf("WARNING: %s: %v", path, err)
 			}
 
 			return nil
 		}
 
-		if !strings.HasPrefix(mimetype, "image/") {
+		if !info.Mode().IsRegular() {
+			if info.Mode().IsDir() {
+				if depth == 0 {
+					return filepath.SkipDir
+				}
+				if depth > 0 {
+					depth--
+				}
+			}
 			return nil
 		}
 
-		if !*noSpinner {
+		var abspath string
+		var fp uint64
+		haveFP := false
+
+		if db != nil {
+			abspath, _ = filepath.Abs(path)
+			var err error
+			fp, haveFP, err = db.Get(abspath, info.ModTime())
+			if err != nil {
+				log.Print("ERROR:", err)
+			}
+		}
+
+		if haveFP {
 			spinner.Spin(path)
-		}
+		} else {
+			mimetype, err := magicmime.TypeByFile(path)
+			if err != nil {
+				if !quiet {
+					log.Printf("WARNING: %s: %v", path, err)
+				}
 
-		fp, err = phash.ImageHashDCT(path)
-		if err != nil {
-			if !*quiet {
-				log.Printf("WARNING: %s: %v", path, err)
+				return nil
 			}
 
-			return nil
-		}
-
-		if fp == 0 {
-			if !*quiet {
-				log.Printf("WARNING: %s: cannot compute fingerprint", path)
+			if !strings.HasPrefix(mimetype, "image/") {
+				return nil
 			}
 
-			return nil
+			spinner.Spin(path)
+
+			fp, err = phash.ImageHashDCT(path)
+			if err != nil {
+				if !quiet {
+					log.Printf("WARNING: %s: %v", path, err)
+				}
+
+				return nil
+			}
+
+			if fp == 0 {
+				if !quiet {
+					log.Printf("WARNING: %s: cannot compute fingerprint", path)
+				}
+
+				return nil
+			}
+
+			if db != nil {
+				if err := db.Upsert(abspath, info.ModTime(), fp); err != nil {
+					log.Println("ERROR:", err)
+				}
+			}
 		}
 
-		Upsert(abspath, info.ModTime(), fp)
+		hmap[fp] = append(hmap[fp], path)
+
+		return nil
 	}
-
-	hmap[fp] = append(hmap[fp], path)
-
-	return nil
 }
 
 func main() {
 	log.SetFlags(0)
 
+	flag.IntVar(&threshold, "t", 0, "Hamming distance threshold (0..64)")
+	flag.IntVar(&threshold, "threshold", 0, "")
+
+	flag.BoolVar(&recurse, "R", false, "Search for images recursively")
+	flag.BoolVar(&recurse, "recurse", false, "")
+
+	flag.BoolVar(&noCompare, "n", false, "Don't look for duplicates")
+	flag.BoolVar(&noCompare, "no-compare", false, "")
+
+	flag.StringVar(&program, "p", "", "Launch program (in foreground) to view each set of dupes")
+	flag.StringVar(&program, "program", "", "")
+
+	flag.StringVar(&programArgs, "args", "", "Pass additions arguments to the program")
+
+	flag.StringVar(&dbPath, "f", "", "File to use as a fingerprint database")
+	flag.StringVar(&dbPath, "fp", "", "")
+	flag.StringVar(&dbPath, "db", "", "")
+	flag.StringVar(&dbPath, "fingerprints", "", "")
+
+	flag.BoolVar(&prune, "P", false, "Remove fingerprint data for images that do not exist any more")
+	flag.BoolVar(&prune, "prune", false, "")
+
+	flag.BoolVar(&quiet, "q", false, "Quiet mode (no warnings)")
+	flag.BoolVar(&quiet, "quiet", false, "")
+
 	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Usage: findimagedupes [options] directory [directory...]")
-		flag.PrintDefaults()
+		fmt.Fprintln(os.Stderr, `Usage: findimagedupes [options] [file...]
+
+    Options:
+       -t, --threshold=AMOUNT         Use AMOUNT as threshold of similarity
+       -R, --recurse                  Search recursively for images inside subdirectories
+       -n, --no-compare               Don't look for duplicates
+       -p, --program=PROGRAM          Launch PROGRAM (in foreground) to view each set of dupes
+           --args=ARGUMENTS           Pass additional ARGUMENTS to the program before the filenames
+       -f, --fingerprints=FILE        Use FILE as fingerprint database
+       -P, --prune                    Remove fingerprint data for images that do not exist any more
+       -q, --quiet                    Quiet mode (no warnings)
+
+       -h, --help
+`)
 	}
 	flag.Parse()
 
-	if prune {
-		Prune()
+	if prune && dbPath == "" {
+		log.Fatal("--prune used without --f")
 	}
 
-	if len(flag.Args()) == 0 {
+	if programArgs != "" && program == "" {
+		log.Fatal("--args used without --program")
+	}
+
+	if noCompare && program != "" {
+		log.Fatal("--no-compare used with --program")
+	}
+
+	var err error
+	if db, err = OpenDatabase(dbPath); err != nil {
+		log.Fatal(err)
+	}
+
+	if prune {
+		if err := db.Prune(); err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	if flag.NArg() == 0 {
 		if prune {
 			os.Exit(0)
 		}
@@ -134,19 +212,24 @@ func main() {
 		os.Exit(1)
 	}
 
-	viewerArgs := parseArgs(*vargs)
+	programArgs := parseArgs(programArgs)
 
 	spinner = NewSpinner()
 
 	// Search for image files and compute hashes.
+	depth := 1
+	if recurse {
+		depth = -1
+	}
+	process := process(depth)
 	for _, d := range flag.Args() {
-		filepath.Walk(d, ProcessFile)
+		filepath.Walk(d, process)
 	}
 
 	spinner.Stop()
 
 	// Find similar hashes.
-	if *threshold > 0 {
+	if threshold > 0 {
 		hashes := make([]uint64, 0, len(hmap))
 		for h := range hmap {
 			hashes = append(hashes, h)
@@ -157,12 +240,16 @@ func main() {
 				h2 := hashes[j]
 
 				d := phash.HammingDistance(h1, h2)
-				if d <= *threshold {
+				if d <= threshold {
 					hmap[h1] = append(hmap[h1], hmap[h2]...)
 					delete(hmap, h2)
 				}
 			}
 		}
+	}
+
+	if noCompare {
+		os.Exit(0)
 	}
 
 	// Print or view duplicates.
@@ -171,14 +258,14 @@ func main() {
 			continue
 		}
 
-		if *viewer == "" {
+		if program == "" {
 			fmt.Println(strings.Join(files, " "))
 		} else {
-			args := append(viewerArgs, files...)
-			cmd := exec.Command(*viewer, args...)
+			args := append(programArgs, files...)
+			cmd := exec.Command(program, args...)
 			err := cmd.Run()
 			if err != nil {
-				log.Printf("ERROR: %s %s: %v", *viewer, strings.Join(args, " "), err)
+				log.Printf("ERROR: %s %s: %v", program, strings.Join(args, " "), err)
 			}
 		}
 	}
