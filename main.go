@@ -43,6 +43,8 @@ var (
 
 func process(db *DB, depth int, spinner *Spinner) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
+		spinner.Spin(path)
+
 		if err != nil {
 			if !quiet {
 				log.Printf("WARNING: %s: %v", path, err)
@@ -75,9 +77,7 @@ func process(db *DB, depth int, spinner *Spinner) filepath.WalkFunc {
 			}
 		}
 
-		if haveFP {
-			spinner.Spin(path)
-		} else {
+		if !haveFP {
 			mimetype, err := magicmime.TypeByFile(path)
 			if err != nil {
 				if !quiet {
@@ -89,8 +89,6 @@ func process(db *DB, depth int, spinner *Spinner) filepath.WalkFunc {
 			if !strings.HasPrefix(mimetype, "image/") {
 				return nil
 			}
-
-			spinner.Spin(path)
 
 			fp, err = phash.ImageHashDCT(path)
 			if err != nil {
