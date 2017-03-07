@@ -182,7 +182,7 @@ func main() {
 	flag.Parse()
 
 	if prune && dbPath == "" {
-		log.Fatal("--prune used without --f")
+		log.Fatal("--prune used without -f")
 	}
 
 	if programArgs != "" && program == "" {
@@ -191,6 +191,10 @@ func main() {
 
 	if noCompare && program != "" {
 		log.Fatal("--no-compare used with --program")
+	}
+
+	if noCompare && dbPath == "" {
+		log.Fatal("--no-compare is useless without -f")
 	}
 
 	var err error
