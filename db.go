@@ -15,7 +15,6 @@ package main
 
 import (
 	"database/sql"
-	"log"
 	"os"
 	"time"
 
@@ -111,9 +110,7 @@ func (db *DB) Prune() error {
 				toDelete = append(toDelete, path)
 				continue
 			}
-			if quiet < 2 {
-				log.Println("ERROR:", err)
-			}
+			log.Error("ERROR:", err)
 			continue
 		}
 
