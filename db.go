@@ -40,7 +40,7 @@ var (
 )
 
 func init() {
-	flag.BoolVar(&cleanup, "cleanup", false, "Clean up the fingerprint database of the stale entries")
+	flag.BoolVar(&prune, "prune", false, "Remove fingerprint data for images that do not exist any more")
 
 	dbpath := os.ExpandEnv("$HOME/.findimagedupes.sqlite")
 	var err error
@@ -97,7 +97,7 @@ func Upsert(path string, modtime time.Time, fp uint64) {
 	}
 }
 
-func Cleanup() {
+func Prune() {
 	rows, err := db.Query("SELECT path, fp, lastmod FROM fingerprints")
 	if err != nil {
 		log.Fatal(err)

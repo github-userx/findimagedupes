@@ -33,7 +33,7 @@ var (
 	threshold = flag.Int("t", 0, "Hamming distance threshold (0..64)")
 	viewer    = flag.String("v", "", `Image viewer, e.g. -v feh; if no viewer is specified (default), findimagedupes will print similar files to the standard output`)
 	vargs     = flag.String("args", "", `Image viewer arguments; e.g. for feh, -args '-. -^ "%u / %l - %wx%h - %n"'`)
-	cleanup   bool
+	prune     bool
 	noSpinner = flag.Bool("no-spinner", false, "Don't show spinner")
 
 	hmap = make(map[uint64][]string)
@@ -122,12 +122,12 @@ func main() {
 	}
 	flag.Parse()
 
-	if cleanup {
-		Cleanup()
+	if prune {
+		Prune()
 	}
 
 	if len(flag.Args()) == 0 {
-		if cleanup {
+		if prune {
 			os.Exit(0)
 		}
 		flag.Usage()
