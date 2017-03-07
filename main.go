@@ -58,7 +58,6 @@ func process(depth int) filepath.WalkFunc {
 			if !quiet {
 				log.Printf("WARNING: %s: %v", path, err)
 			}
-
 			return nil
 		}
 
@@ -95,7 +94,6 @@ func process(depth int) filepath.WalkFunc {
 				if !quiet {
 					log.Printf("WARNING: %s: %v", path, err)
 				}
-
 				return nil
 			}
 
@@ -110,7 +108,6 @@ func process(depth int) filepath.WalkFunc {
 				if !quiet {
 					log.Printf("WARNING: %s: %v", path, err)
 				}
-
 				return nil
 			}
 
@@ -118,7 +115,6 @@ func process(depth int) filepath.WalkFunc {
 				if !quiet {
 					log.Printf("WARNING: %s: cannot compute fingerprint", path)
 				}
-
 				return nil
 			}
 
