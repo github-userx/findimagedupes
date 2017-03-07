@@ -83,7 +83,7 @@ func process(depth int) filepath.WalkFunc {
 			var err error
 			fp, haveFP, err = db.Get(abspath, info.ModTime())
 			if err != nil {
-				log.Print("ERROR:", err)
+				log.Println("ERROR:", err)
 			}
 		}
 
