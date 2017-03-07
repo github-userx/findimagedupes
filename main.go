@@ -28,6 +28,8 @@ import (
 	"github.com/opennota/phash"
 )
 
+type quietVar int
+
 var (
 	threshold   int
 	recurse     bool
@@ -36,17 +38,30 @@ var (
 	programArgs string
 	dbPath      string
 	prune       bool
-	quiet       bool
+	quiet       quietVar
 
 	hmap = make(map[uint64][]string)
 )
+
+func (q quietVar) String() string {
+	return fmt.Sprint(int(q))
+}
+
+func (q quietVar) IsBoolFlag() bool {
+	return true
+}
+
+func (q *quietVar) Set(val string) error {
+	*q++
+	return nil
+}
 
 func process(db *DB, depth int, spinner *Spinner) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
 		spinner.Spin(path)
 
 		if err != nil {
-			if !quiet {
+			if quiet < 1 {
 				log.Printf("WARNING: %s: %v", path, err)
 			}
 			return nil
@@ -72,7 +87,7 @@ func process(db *DB, depth int, spinner *Spinner) filepath.WalkFunc {
 			abspath, _ = filepath.Abs(path)
 			var err error
 			fp, haveFP, err = db.Get(abspath, info.ModTime())
-			if err != nil {
+			if err != nil && quiet < 2 {
 				log.Println("ERROR:", err)
 			}
 		}
@@ -80,7 +95,7 @@ func process(db *DB, depth int, spinner *Spinner) filepath.WalkFunc {
 		if !haveFP {
 			mimetype, err := magicmime.TypeByFile(path)
 			if err != nil {
-				if !quiet {
+				if quiet < 1 {
 					log.Printf("WARNING: %s: %v", path, err)
 				}
 				return nil
@@ -92,21 +107,21 @@ func process(db *DB, depth int, spinner *Spinner) filepath.WalkFunc {
 
 			fp, err = phash.ImageHashDCT(path)
 			if err != nil {
-				if !quiet {
+				if quiet < 1 {
 					log.Printf("WARNING: %s: %v", path, err)
 				}
 				return nil
 			}
 
 			if fp == 0 {
-				if !quiet {
+				if quiet < 1 {
 					log.Printf("WARNING: %s: cannot compute fingerprint", path)
 				}
 				return nil
 			}
 
 			if db != nil {
-				if err := db.Upsert(abspath, info.ModTime(), fp); err != nil {
+				if err := db.Upsert(abspath, info.ModTime(), fp); err != nil && quiet < 2 {
 					log.Println("ERROR:", err)
 				}
 			}
@@ -143,8 +158,8 @@ func main() {
 	flag.BoolVar(&prune, "P", false, "Remove fingerprint data for images that do not exist any more")
 	flag.BoolVar(&prune, "prune", false, "")
 
-	flag.BoolVar(&quiet, "q", false, "Quiet mode (no warnings)")
-	flag.BoolVar(&quiet, "quiet", false, "")
+	flag.Var(&quiet, "q", "Quiet mode (no warnings, if given once; no errors either, if given twice)")
+	flag.Var(&quiet, "quiet", "")
 
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, `Usage: findimagedupes [options] [file...]
@@ -155,12 +170,13 @@ func main() {
        -n, --no-compare               Don't look for duplicates
        -p, --program=PROGRAM          Launch PROGRAM (in foreground) to view each set of dupes
            --args=ARGUMENTS           Pass additional ARGUMENTS to the program before the filenames;
-                                          e.g, for feh, '-. -^ "%u / %l - %wx%h - %n"'
+                                          e.g. for feh, '-. -^ "%u / %l - %wx%h - %n"'
        -f, --fingerprints=FILE        Use FILE as fingerprint database
        -P, --prune                    Remove fingerprint data for images that do not exist any more
-       -q, --quiet                    Quiet mode (no warnings)
+       -q, --quiet                    If this option is given, warnings are not displayed; if it is
+                                          given twice, non-fatal errors are not displayed either
 
-       -h, --help
+       -h, --help                     Show this help
 `)
 	}
 	flag.Parse()
@@ -260,7 +276,7 @@ func main() {
 			args := append(programArgs, files...)
 			cmd := exec.Command(program, args...)
 			err := cmd.Run()
-			if err != nil {
+			if err != nil && quiet < 2 {
 				log.Printf("ERROR: %s %s: %v", program, strings.Join(args, " "), err)
 			}
 		}

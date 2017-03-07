@@ -111,7 +111,9 @@ func (db *DB) Prune() error {
 				toDelete = append(toDelete, path)
 				continue
 			}
-			log.Println("ERROR:", err)
+			if quiet < 2 {
+				log.Println("ERROR:", err)
+			}
 			continue
 		}
 
