@@ -41,13 +41,6 @@ var (
 	hmap = make(map[uint64][]string)
 )
 
-func init() {
-	err := magicmime.Open(magicmime.MAGIC_MIME_TYPE | magicmime.MAGIC_SYMLINK | magicmime.MAGIC_ERROR)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
 func process(db *DB, depth int, spinner *Spinner) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -188,6 +181,11 @@ func main() {
 
 	if noCompare && dbPath == "" {
 		log.Fatal("--no-compare is useless without -f")
+	}
+
+	err := magicmime.Open(magicmime.MAGIC_MIME_TYPE | magicmime.MAGIC_SYMLINK | magicmime.MAGIC_ERROR)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	db, err := OpenDatabase(dbPath)
