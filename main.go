@@ -38,11 +38,7 @@ var (
 	prune       bool
 	quiet       bool
 
-	db *DB
-
 	hmap = make(map[uint64][]string)
-
-	spinner *Spinner
 )
 
 func init() {
@@ -52,7 +48,7 @@ func init() {
 	}
 }
 
-func process(depth int) filepath.WalkFunc {
+func process(db *DB, depth int, spinner *Spinner) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			if !quiet {
@@ -194,8 +190,8 @@ func main() {
 		log.Fatal("--no-compare is useless without -f")
 	}
 
-	var err error
-	if db, err = OpenDatabase(dbPath); err != nil {
+	db, err := OpenDatabase(dbPath)
+	if err != nil {
 		log.Fatal(err)
 	}
 
@@ -215,14 +211,14 @@ func main() {
 
 	programArgs := parseArgs(programArgs)
 
-	spinner = NewSpinner()
+	spinner := NewSpinner()
 
 	// Search for image files and compute hashes.
 	depth := 1
 	if recurse {
 		depth = -1
 	}
-	process := process(depth)
+	process := process(db, depth, spinner)
 	for _, d := range flag.Args() {
 		filepath.Walk(d, process)
 	}
