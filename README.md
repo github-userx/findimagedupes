@@ -25,4 +25,4 @@ If no arguments are specified, findimagedupes will print all the available argum
 
 # Also
 
-There is a [Perl script](http://www.ostertag.name/HowTo/findimagedupes.shtml) by that name, which uses a different hashing algorithm.
+There is a [Perl script](http://www.jhnc.org/findimagedupes/) by that name, which uses a different hashing algorithm.
