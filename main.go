@@ -171,7 +171,8 @@ func main() {
        -R, --recurse                  Search recursively for images inside subdirectories
        -n, --no-compare               Don't look for duplicates
        -p, --program=PROGRAM          Launch PROGRAM (in foreground) to view each set of dupes
-           --args=ARGUMENTS           Pass additional ARGUMENTS to the program before the filenames
+           --args=ARGUMENTS           Pass additional ARGUMENTS to the program before the filenames;
+                                          e.g, for feh, '-. -^ "%u / %l - %wx%h - %n"'
        -f, --fingerprints=FILE        Use FILE as fingerprint database
        -P, --prune                    Remove fingerprint data for images that do not exist any more
        -q, --quiet                    Quiet mode (no warnings)
