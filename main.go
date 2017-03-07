@@ -181,13 +181,9 @@ func main() {
 		log.Fatal("--no-compare is useless without -f")
 	}
 
-	err := magicmime.Open(magicmime.MAGIC_MIME_TYPE | magicmime.MAGIC_SYMLINK | magicmime.MAGIC_ERROR)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	var db *DB
 	if dbPath != "" {
+		var err error
 		db, err = OpenDatabase(dbPath)
 		if err != nil {
 			log.Fatal(err)
@@ -211,6 +207,10 @@ func main() {
 	programArgs := parseArgs(programArgs)
 
 	spinner := NewSpinner()
+
+	if err := magicmime.Open(magicmime.MAGIC_MIME_TYPE | magicmime.MAGIC_SYMLINK | magicmime.MAGIC_ERROR); err != nil {
+		log.Fatal(err)
+	}
 
 	// Search for image files and compute hashes.
 	depth := 1
