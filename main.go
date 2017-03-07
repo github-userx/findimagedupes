@@ -188,14 +188,17 @@ func main() {
 		log.Fatal(err)
 	}
 
-	db, err := OpenDatabase(dbPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if prune {
-		if err := db.Prune(); err != nil {
+	var db *DB
+	if dbPath != "" {
+		db, err = OpenDatabase(dbPath)
+		if err != nil {
 			log.Fatal(err)
+		}
+
+		if prune {
+			if err := db.Prune(); err != nil {
+				log.Fatal(err)
+			}
 		}
 	}
 
