@@ -13,9 +13,7 @@
 
 package main
 
-import (
-	"bytes"
-)
+import "bytes"
 
 func parseArgs(s string) (args []string) {
 	quoted := false
