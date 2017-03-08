@@ -26,7 +26,7 @@ Search for similar images in the `~/Images` directory:
 
     findimagedupes -R ~/Images
 
-The same but use feh to display the duplicates.
+The same but use [feh](https://feh.finalrewind.org/) to display the duplicates.
 
     findimagedupes -R -p feh ~/Images
 
