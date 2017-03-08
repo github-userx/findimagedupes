@@ -5,7 +5,7 @@ findimagedupes finds visually similar or duplicate images.
 
 # Installation
 
-findimagedupes uses [rakyll/magicmime](https://godoc.org/github.com/rakyll/magicmime),
+findimagedupes uses [rakyll/magicmime](https://github.com/rakyll/magicmime),
 which requires `libmagic`. Install it as follows:
 
 - Debian or Ubuntu: `apt-get install libmagic-dev`
