@@ -23,25 +23,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rakyll/magicmime"
-
 	"github.com/opennota/phash"
+	"github.com/rakyll/magicmime"
 )
 
-var (
-	threshold   int
-	recurse     bool
-	noCompare   bool
-	program     string
-	programArgs string
-	dbPath      string
-	prune       bool
-	log         quietVar
+var log quietVar
 
-	m = make(map[uint64][]string)
-)
-
-func process(db *DB, depth int, spinner *Spinner) filepath.WalkFunc {
+func process(db *DB, depth int, spinner *Spinner, m map[uint64][]string) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
 		spinner.Spin(path)
 
@@ -113,6 +101,16 @@ func process(db *DB, depth int, spinner *Spinner) filepath.WalkFunc {
 func main() {
 	stdlog.SetFlags(0)
 
+	var (
+		threshold int
+		recurse   bool
+		noCompare bool
+		program   string
+		args      string
+		dbPath    string
+		prune     bool
+	)
+
 	flag.IntVar(&threshold, "t", 0, "Hamming distance threshold (0..64)")
 	flag.IntVar(&threshold, "threshold", 0, "")
 
@@ -125,7 +123,7 @@ func main() {
 	flag.StringVar(&program, "p", "", "Launch program (in foreground) to view each set of dupes")
 	flag.StringVar(&program, "program", "", "")
 
-	flag.StringVar(&programArgs, "args", "", "Pass additions arguments to the program")
+	flag.StringVar(&args, "args", "", "Pass additions arguments to the program")
 
 	flag.StringVar(&dbPath, "f", "", "File to use as a fingerprint database")
 	flag.StringVar(&dbPath, "fp", "", "")
@@ -162,7 +160,7 @@ func main() {
 		log.Fatal("--prune used without -f")
 	}
 
-	if programArgs != "" && program == "" {
+	if args != "" && program == "" {
 		log.Fatal("--args used without --program")
 	}
 
@@ -197,7 +195,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	programArgs := parseArgs(programArgs)
+	programArgs := parseArgs(args)
 
 	spinner := NewSpinner()
 
@@ -210,7 +208,8 @@ func main() {
 	if recurse {
 		depth = -1
 	}
-	process := process(db, depth, spinner)
+	m := make(map[uint64][]string)
+	process := process(db, depth, spinner, m)
 	for _, d := range flag.Args() {
 		filepath.Walk(d, process)
 	}
