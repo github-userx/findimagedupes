@@ -5,6 +5,15 @@ findimagedupes finds visually similar or duplicate images.
 
 # Installation
 
+findimagedupes uses [rakyll/magicmime](https://godoc.org/github.com/rakyll/magicmime),
+which requires `libmagic`. Install it as follows:
+
+- Debian or Ubuntu: `apt-get install libmagic-dev`
+- RHEL, CentOS or Fedora: `yum install file-devel`
+- Mac OS X: `brew install libmagic`
+
+Then
+
     go get github.com/opennota/findimagedupes
 
 # Usage
