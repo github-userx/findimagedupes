@@ -38,7 +38,7 @@ var (
 	prune       bool
 	log         quietVar
 
-	hmap = make(map[uint64][]string)
+	m = make(map[uint64][]string)
 )
 
 func process(db *DB, depth int, spinner *Spinner) filepath.WalkFunc {
@@ -104,7 +104,7 @@ func process(db *DB, depth int, spinner *Spinner) filepath.WalkFunc {
 			}
 		}
 
-		hmap[fp] = append(hmap[fp], path)
+		m[fp] = append(m[fp], path)
 
 		return nil
 	}
@@ -223,8 +223,8 @@ func main() {
 
 	// Find similar hashes.
 	if threshold > 0 {
-		hashes := make([]uint64, 0, len(hmap))
-		for h := range hmap {
+		hashes := make([]uint64, 0, len(m))
+		for h := range m {
 			hashes = append(hashes, h)
 		}
 		for i := 0; i < len(hashes)-1; i++ {
@@ -234,15 +234,15 @@ func main() {
 
 				d := phash.HammingDistance(h1, h2)
 				if d <= threshold {
-					hmap[h1] = append(hmap[h1], hmap[h2]...)
-					delete(hmap, h2)
+					m[h1] = append(m[h1], m[h2]...)
+					delete(m, h2)
 				}
 			}
 		}
 	}
 
 	// Print or view duplicates.
-	for _, files := range hmap {
+	for _, files := range m {
 		if len(files) < 2 {
 			continue
 		}
