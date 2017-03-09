@@ -251,6 +251,7 @@ func main() {
 		} else {
 			args := append(programArgs, files...)
 			cmd := exec.Command(program, args...)
+			cmd.Stderr = os.Stderr
 			err := cmd.Run()
 			if err != nil {
 				log.Errorf("ERROR: %s %s: %v", program, strings.Join(args, " "), err)
