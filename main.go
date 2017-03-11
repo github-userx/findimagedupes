@@ -204,14 +204,14 @@ func main() {
 	}
 
 	// Search for image files and compute hashes.
-	depth := 1
+	maxDepth := 1
 	if recurse {
-		depth = -1
+		maxDepth = -1
 	}
 	m := make(map[uint64][]string)
-	process := process(db, depth, spinner, m)
 	for _, d := range flag.Args() {
-		filepath.Walk(d, process)
+		walkFn := process(db, maxDepth, spinner, m)
+		filepath.Walk(d, walkFn)
 	}
 
 	spinner.Stop()
