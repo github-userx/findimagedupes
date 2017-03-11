@@ -138,6 +138,10 @@ func (db *DB) Prune() error {
 	}
 
 	tx, err := db.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 
 	if len(toDelete) > 0 {
 		stmt, err := tx.Prepare("DELETE FROM fingerprints WHERE path = ?")
