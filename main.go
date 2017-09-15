@@ -150,10 +150,10 @@ func main() {
 		args      string
 		dbPath    string
 		prune     bool
-		cores     int
+		jobs      int
 	)
 
-	defaultCores := runtime.GOMAXPROCS(0)
+	defaultJobs := runtime.GOMAXPROCS(0)
 
 	flag.IntVar(&threshold, "t", 0, "Hamming distance threshold (0..64)")
 	flag.IntVar(&threshold, "threshold", 0, "")
@@ -177,7 +177,8 @@ func main() {
 	flag.BoolVar(&prune, "P", false, "Remove fingerprint data for images that do not exist any more")
 	flag.BoolVar(&prune, "prune", false, "")
 
-	flag.IntVar(&cores, "cores", defaultCores, "Number of CPU cores to use for processing images")
+	flag.IntVar(&jobs, "j", defaultJobs, "Number of jobs to use for image processing")
+	flag.IntVar(&jobs, "jobs", defaultJobs, "")
 
 	flag.Var(&log, "q", "Quiet mode (no warnings, if given once; no errors either, if given twice)")
 	flag.Var(&log, "quiet", "")
@@ -194,13 +195,13 @@ func main() {
                                           e.g. for feh, '-. -^ "%%u / %%l - %%wx%%h - %%n"'
        -f, --fingerprints=FILE        Use FILE as fingerprint database
        -P, --prune                    Remove fingerprint data for images that do not exist any more
-           --cores                    Number of CPU cores to use for processing images (default %d)
+       -j, --jobs                     Number of jobs to use for image processing (default %d)
        -q, --quiet                    If this option is given, warnings are not displayed; if it is
                                           given twice, non-fatal errors are not displayed either
 
        -h, --help                     Show this help
 
-`, defaultCores)
+`, defaultJobs)
 	}
 	flag.Parse()
 
@@ -257,8 +258,8 @@ func main() {
 	results := make(chan result)
 
 	workC := make(chan request)
-	workDone := make(chan chan struct{}, cores)
-	for i := 0; i < cores; i++ {
+	workDone := make(chan chan struct{}, jobs)
+	for i := 0; i < jobs; i++ {
 		done := make(chan struct{})
 		go worker(db, workC, results, done)
 		workDone <- done
