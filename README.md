@@ -14,7 +14,7 @@ which requires `libmagic`. Install it as follows:
 
 Then
 
-    go get github.com/opennota/findimagedupes
+    go get -u github.com/opennota/findimagedupes
 
 # Usage
 
