@@ -21,8 +21,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/opennota/phash"
 	"github.com/rakyll/magicmime"
@@ -30,7 +32,84 @@ import (
 
 var log quietVar
 
-func process(db *DB, depth int, spinner *Spinner, m map[uint64][]string) filepath.WalkFunc {
+type result struct {
+	fp   uint64
+	path string
+}
+
+func resultWorker(m map[uint64][]string, in <-chan result, done chan struct{}) {
+	for r := range in {
+		m[r.fp] = append(m[r.fp], r.path)
+	}
+
+	close(done)
+}
+
+type request struct {
+	path    string
+	modTime time.Time
+}
+
+func worker(db *DB, in <-chan request, out chan<- result, done chan struct{}) {
+	mm, err := magicmime.NewDecoder(magicmime.MAGIC_MIME_TYPE | magicmime.MAGIC_SYMLINK | magicmime.MAGIC_ERROR)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer mm.Close()
+
+	for m := range in {
+		var abspath string
+		var fp uint64
+		haveFP := false
+
+		if db != nil {
+			abspath, _ = filepath.Abs(m.path)
+			var err error
+			fp, haveFP, err = db.Get(abspath, m.modTime)
+			if err != nil {
+				log.Error("ERROR:", err)
+			}
+		}
+
+		if !haveFP {
+			mimetype, err := mm.TypeByFile(m.path)
+			if err != nil {
+				log.Warnf("WARNING: %s: %v", m.path, err)
+				continue
+			}
+
+			if !strings.HasPrefix(mimetype, "image/") {
+				continue
+			}
+
+			fp, err = phash.ImageHashDCT(m.path)
+			if err != nil {
+				log.Warnf("WARNING: %s: %v", m.path, err)
+				continue
+			}
+
+			if fp == 0 {
+				log.Warnf("WARNING: %s: cannot compute fingerprint", m.path)
+				continue
+			}
+
+			if db != nil {
+				if err := db.Upsert(abspath, m.modTime, fp); err != nil {
+					log.Error("ERROR:", err)
+				}
+			}
+		}
+
+		out <- result{
+			fp:   fp,
+			path: m.path,
+		}
+	}
+
+	close(done)
+}
+
+func process(depth int, spinner *Spinner, work chan<- request) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
 		spinner.Spin(path)
 
@@ -51,49 +130,10 @@ func process(db *DB, depth int, spinner *Spinner, m map[uint64][]string) filepat
 			return nil
 		}
 
-		var abspath string
-		var fp uint64
-		haveFP := false
-
-		if db != nil {
-			abspath, _ = filepath.Abs(path)
-			var err error
-			fp, haveFP, err = db.Get(abspath, info.ModTime())
-			if err != nil {
-				log.Error("ERROR:", err)
-			}
+		work <- request{
+			path:    path,
+			modTime: info.ModTime(),
 		}
-
-		if !haveFP {
-			mimetype, err := magicmime.TypeByFile(path)
-			if err != nil {
-				log.Warnf("WARNING: %s: %v", path, err)
-				return nil
-			}
-
-			if !strings.HasPrefix(mimetype, "image/") {
-				return nil
-			}
-
-			fp, err = phash.ImageHashDCT(path)
-			if err != nil {
-				log.Warnf("WARNING: %s: %v", path, err)
-				return nil
-			}
-
-			if fp == 0 {
-				log.Warnf("WARNING: %s: cannot compute fingerprint", path)
-				return nil
-			}
-
-			if db != nil {
-				if err := db.Upsert(abspath, info.ModTime(), fp); err != nil {
-					log.Error("ERROR:", err)
-				}
-			}
-		}
-
-		m[fp] = append(m[fp], path)
 
 		return nil
 	}
@@ -110,7 +150,10 @@ func main() {
 		args      string
 		dbPath    string
 		prune     bool
+		jobs      int
 	)
+
+	defaultJobs := runtime.GOMAXPROCS(0)
 
 	flag.IntVar(&threshold, "t", 0, "Hamming distance threshold (0..64)")
 	flag.IntVar(&threshold, "threshold", 0, "")
@@ -134,11 +177,14 @@ func main() {
 	flag.BoolVar(&prune, "P", false, "Remove fingerprint data for images that do not exist any more")
 	flag.BoolVar(&prune, "prune", false, "")
 
+	flag.IntVar(&jobs, "j", defaultJobs, "Number of jobs to use for image processing")
+	flag.IntVar(&jobs, "jobs", defaultJobs, "")
+
 	flag.Var(&log, "q", "Quiet mode (no warnings, if given once; no errors either, if given twice)")
 	flag.Var(&log, "quiet", "")
 
 	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, `Usage: findimagedupes [options] [file...]
+		fmt.Fprintf(os.Stderr, `Usage: findimagedupes [options] [file...]
 
     Options:
        -t, --threshold=AMOUNT         Use AMOUNT as threshold of similarity (0..64; default 0)
@@ -146,14 +192,16 @@ func main() {
        -n, --no-compare               Don't look for duplicates
        -p, --program=PROGRAM          Launch PROGRAM (in foreground) to view each set of dupes
            --args=ARGUMENTS           Pass additional ARGUMENTS to the program before the filenames;
-                                          e.g. for feh, '-. -^ "%u / %l - %wx%h - %n"'
+                                          e.g. for feh, '-. -^ "%%u / %%l - %%wx%%h - %%n"'
        -f, --fingerprints=FILE        Use FILE as fingerprint database
        -P, --prune                    Remove fingerprint data for images that do not exist any more
+       -j, --jobs                     Number of jobs to use for image processing (default %d)
        -q, --quiet                    If this option is given, warnings are not displayed; if it is
                                           given twice, non-fatal errors are not displayed either
 
        -h, --help                     Show this help
-`)
+
+`, defaultJobs)
 	}
 	flag.Parse()
 
@@ -200,20 +248,38 @@ func main() {
 
 	spinner := NewSpinner()
 
-	if err := magicmime.Open(magicmime.MAGIC_MIME_TYPE | magicmime.MAGIC_SYMLINK | magicmime.MAGIC_ERROR); err != nil {
-		log.Fatal(err)
-	}
-
 	// Search for image files and compute hashes.
 	maxDepth := 1
 	if recurse {
 		maxDepth = -1
 	}
 	m := make(map[uint64][]string)
+
+	results := make(chan result)
+
+	workC := make(chan request)
+	workDone := make(chan chan struct{}, jobs)
+	for i := 0; i < jobs; i++ {
+		done := make(chan struct{})
+		go worker(db, workC, results, done)
+		workDone <- done
+	}
+	close(workDone)
+
+	resultDone := make(chan struct{})
+	go resultWorker(m, results, resultDone)
+
 	for _, d := range flag.Args() {
-		walkFn := process(db, maxDepth, spinner, m)
+		walkFn := process(maxDepth, spinner, workC)
 		filepath.Walk(d, walkFn)
 	}
+
+	close(workC)
+	for done := range workDone {
+		<-done
+	}
+	close(results)
+	<-resultDone
 
 	spinner.Stop()
 
