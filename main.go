@@ -82,12 +82,6 @@ func worker(db *DB, in <-chan request, out chan<- result, done chan struct{}) {
 				continue
 			}
 
-			if db != nil {
-				if err := db.Upsert(abspath, m.modTime, fp); err != nil {
-					log.Error("ERROR:", err)
-				}
-			}
-
 			fp, err := phash.ImageHashDCT(m.path)
 			if err != nil {
 				log.Warnf("WARNING: %s: %v", m.path, err)
@@ -97,6 +91,12 @@ func worker(db *DB, in <-chan request, out chan<- result, done chan struct{}) {
 			if fp == 0 {
 				log.Warnf("WARNING: %s: cannot compute fingerprint", m.path)
 				continue
+			}
+
+			if db != nil {
+				if err := db.Upsert(abspath, m.modTime, fp); err != nil {
+					log.Error("ERROR:", err)
+				}
 			}
 		}
 
