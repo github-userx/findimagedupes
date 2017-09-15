@@ -82,7 +82,7 @@ func worker(db *DB, in <-chan request, out chan<- result, done chan struct{}) {
 				continue
 			}
 
-			fp, err := phash.ImageHashDCT(m.path)
+			fp, err = phash.ImageHashDCT(m.path)
 			if err != nil {
 				log.Warnf("WARNING: %s: %v", m.path, err)
 				continue
