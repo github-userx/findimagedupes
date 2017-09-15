@@ -246,6 +246,9 @@ func main() {
 			continue
 		}
 
+		// Produce repeatable output.
+		sort.Sort(sort.StringSlice(files))
+
 		if program == "" {
 			fmt.Println(strings.Join(files, " "))
 		} else {
