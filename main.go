@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -30,7 +31,44 @@ import (
 
 var log quietVar
 
-func process(db *DB, depth int, spinner *Spinner, m map[uint64][]string) filepath.WalkFunc {
+type request struct {
+	path string
+	done func(uint64)
+}
+
+type result struct {
+	fp   uint64
+	path string
+}
+
+func hashWorker(in <-chan request, out chan<- result, done chan struct{}) {
+	for r := range in {
+		fp, err := phash.ImageHashDCT(r.path)
+		if err != nil {
+			log.Warnf("WARNING: %s: %v", r.path, err)
+			continue
+		}
+
+		if fp == 0 {
+			log.Warnf("WARNING: %s: cannot compute fingerprint", r.path)
+			continue
+		}
+
+		r.done(fp)
+	}
+
+	close(done)
+}
+
+func resultWorker(m map[uint64][]string, in <-chan result, done chan struct{}) {
+	for r := range in {
+		m[r.fp] = append(m[r.fp], r.path)
+	}
+
+	close(done)
+}
+
+func process(db *DB, depth int, spinner *Spinner, out chan<- result, hasher chan<- request) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
 		spinner.Spin(path)
 
@@ -75,25 +113,29 @@ func process(db *DB, depth int, spinner *Spinner, m map[uint64][]string) filepat
 				return nil
 			}
 
-			fp, err = phash.ImageHashDCT(path)
-			if err != nil {
-				log.Warnf("WARNING: %s: %v", path, err)
-				return nil
-			}
-
-			if fp == 0 {
-				log.Warnf("WARNING: %s: cannot compute fingerprint", path)
-				return nil
-			}
-
-			if db != nil {
-				if err := db.Upsert(abspath, info.ModTime(), fp); err != nil {
-					log.Error("ERROR:", err)
+			done := func(fp uint64) {
+				if db != nil {
+					if err := db.Upsert(abspath, info.ModTime(), fp); err != nil {
+						log.Error("ERROR:", err)
+					}
+				}
+				out <- result{
+					fp:   fp,
+					path: path,
 				}
 			}
+			hasher <- request{
+				path: path,
+				done: done,
+			}
+
+			return nil
 		}
 
-		m[fp] = append(m[fp], path)
+		out <- result{
+			fp:   fp,
+			path: path,
+		}
 
 		return nil
 	}
@@ -110,7 +152,10 @@ func main() {
 		args      string
 		dbPath    string
 		prune     bool
+		cores     int
 	)
+
+	defaultCores := runtime.GOMAXPROCS(0)
 
 	flag.IntVar(&threshold, "t", 0, "Hamming distance threshold (0..64)")
 	flag.IntVar(&threshold, "threshold", 0, "")
@@ -134,11 +179,13 @@ func main() {
 	flag.BoolVar(&prune, "P", false, "Remove fingerprint data for images that do not exist any more")
 	flag.BoolVar(&prune, "prune", false, "")
 
+	flag.IntVar(&cores, "cores", defaultCores, "Number of CPU cores to use for computing the hash")
+
 	flag.Var(&log, "q", "Quiet mode (no warnings, if given once; no errors either, if given twice)")
 	flag.Var(&log, "quiet", "")
 
 	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, `Usage: findimagedupes [options] [file...]
+		fmt.Fprintf(os.Stderr, `Usage: findimagedupes [options] [file...]
 
     Options:
        -t, --threshold=AMOUNT         Use AMOUNT as threshold of similarity (0..64; default 0)
@@ -146,14 +193,16 @@ func main() {
        -n, --no-compare               Don't look for duplicates
        -p, --program=PROGRAM          Launch PROGRAM (in foreground) to view each set of dupes
            --args=ARGUMENTS           Pass additional ARGUMENTS to the program before the filenames;
-                                          e.g. for feh, '-. -^ "%u / %l - %wx%h - %n"'
+                                          e.g. for feh, '-. -^ "%%u / %%l - %%wx%%h - %%n"'
        -f, --fingerprints=FILE        Use FILE as fingerprint database
        -P, --prune                    Remove fingerprint data for images that do not exist any more
+           --cores                    Number of CPU cores to use for computing the hash (default %d)
        -q, --quiet                    If this option is given, warnings are not displayed; if it is
                                           given twice, non-fatal errors are not displayed either
 
        -h, --help                     Show this help
-`)
+
+`, defaultCores)
 	}
 	flag.Parse()
 
@@ -210,10 +259,32 @@ func main() {
 		maxDepth = -1
 	}
 	m := make(map[uint64][]string)
+
+	results := make(chan result)
+
+	hasher := make(chan request)
+	hashDone := make(chan chan struct{}, cores)
+	for i := 0; i < cores; i++ {
+		done := make(chan struct{})
+		go hashWorker(hasher, results, done)
+		hashDone <- done
+	}
+	close(hashDone)
+
+	resultDone := make(chan struct{})
+	go resultWorker(m, results, resultDone)
+
 	for _, d := range flag.Args() {
-		walkFn := process(db, maxDepth, spinner, m)
+		walkFn := process(db, maxDepth, spinner, results, hasher)
 		filepath.Walk(d, walkFn)
 	}
+
+	close(hasher)
+	for done := range hashDone {
+		<-done
+	}
+	close(results)
+	<-resultDone
 
 	spinner.Stop()
 

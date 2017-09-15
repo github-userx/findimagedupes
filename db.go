@@ -16,6 +16,7 @@ package main
 import (
 	"database/sql"
 	"os"
+	"sync"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -30,6 +31,7 @@ type entry struct {
 
 type DB struct {
 	db             *sql.DB
+	mu             sync.Mutex // Protects following.
 	preparedGet    *sql.Stmt
 	preparedUpsert *sql.Stmt
 }
@@ -67,9 +69,11 @@ func iso8601(t time.Time) string {
 
 func (db *DB) Get(path string, modtime time.Time) (uint64, bool, error) {
 	lastmod := iso8601(modtime)
-	row := db.preparedGet.QueryRow(path, lastmod)
 	var fp int64
+	db.mu.Lock()
+	row := db.preparedGet.QueryRow(path, lastmod)
 	err := row.Scan(&fp)
+	db.mu.Unlock()
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return 0, false, nil
@@ -82,7 +86,9 @@ func (db *DB) Get(path string, modtime time.Time) (uint64, bool, error) {
 
 func (db *DB) Upsert(path string, modtime time.Time, fp uint64) error {
 	lastmod := iso8601(modtime)
+	db.mu.Lock()
 	_, err := db.preparedUpsert.Exec(path, int64(fp), lastmod)
+	db.mu.Unlock()
 	return err
 }
 
