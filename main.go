@@ -177,7 +177,7 @@ func main() {
 	flag.BoolVar(&prune, "P", false, "Remove fingerprint data for images that do not exist any more")
 	flag.BoolVar(&prune, "prune", false, "")
 
-	flag.IntVar(&cores, "cores", defaultCores, "Number of CPU cores to use for computing the hash")
+	flag.IntVar(&cores, "cores", defaultCores, "Number of CPU cores to use for processing images")
 
 	flag.Var(&log, "q", "Quiet mode (no warnings, if given once; no errors either, if given twice)")
 	flag.Var(&log, "quiet", "")
@@ -194,7 +194,7 @@ func main() {
                                           e.g. for feh, '-. -^ "%%u / %%l - %%wx%%h - %%n"'
        -f, --fingerprints=FILE        Use FILE as fingerprint database
        -P, --prune                    Remove fingerprint data for images that do not exist any more
-           --cores                    Number of CPU cores to use for computing the hash (default %d)
+           --cores                    Number of CPU cores to use for processing images (default %d)
        -q, --quiet                    If this option is given, warnings are not displayed; if it is
                                           given twice, non-fatal errors are not displayed either
 
