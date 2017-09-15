@@ -31,7 +31,7 @@ type entry struct {
 
 type DB struct {
 	db             *sql.DB
-	mu             sync.Mutex // Protects following.
+	mu             sync.RWMutex // Protects following.
 	preparedGet    *sql.Stmt
 	preparedUpsert *sql.Stmt
 }
@@ -70,10 +70,10 @@ func iso8601(t time.Time) string {
 func (db *DB) Get(path string, modtime time.Time) (uint64, bool, error) {
 	lastmod := iso8601(modtime)
 	var fp int64
-	db.mu.Lock()
+	db.mu.RLock()
 	row := db.preparedGet.QueryRow(path, lastmod)
 	err := row.Scan(&fp)
-	db.mu.Unlock()
+	db.mu.RUnlock()
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return 0, false, nil

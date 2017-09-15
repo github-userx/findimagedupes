@@ -24,6 +24,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/opennota/phash"
 	"github.com/rakyll/magicmime"
@@ -31,33 +32,9 @@ import (
 
 var log quietVar
 
-type request struct {
-	path string
-	done func(uint64)
-}
-
 type result struct {
 	fp   uint64
 	path string
-}
-
-func hashWorker(in <-chan request, out chan<- result, done chan struct{}) {
-	for r := range in {
-		fp, err := phash.ImageHashDCT(r.path)
-		if err != nil {
-			log.Warnf("WARNING: %s: %v", r.path, err)
-			continue
-		}
-
-		if fp == 0 {
-			log.Warnf("WARNING: %s: cannot compute fingerprint", r.path)
-			continue
-		}
-
-		r.done(fp)
-	}
-
-	close(done)
 }
 
 func resultWorker(m map[uint64][]string, in <-chan result, done chan struct{}) {
@@ -68,7 +45,71 @@ func resultWorker(m map[uint64][]string, in <-chan result, done chan struct{}) {
 	close(done)
 }
 
-func process(db *DB, depth int, spinner *Spinner, out chan<- result, hasher chan<- request) filepath.WalkFunc {
+type request struct {
+	path    string
+	modTime time.Time
+}
+
+func worker(db *DB, in <-chan request, out chan<- result, done chan struct{}) {
+	mm, err := magicmime.NewDecoder(magicmime.MAGIC_MIME_TYPE | magicmime.MAGIC_SYMLINK | magicmime.MAGIC_ERROR)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer mm.Close()
+
+	for m := range in {
+		var abspath string
+		var fp uint64
+		haveFP := false
+
+		if db != nil {
+			abspath, _ = filepath.Abs(m.path)
+			var err error
+			fp, haveFP, err = db.Get(abspath, m.modTime)
+			if err != nil {
+				log.Error("ERROR:", err)
+			}
+		}
+
+		if !haveFP {
+			mimetype, err := mm.TypeByFile(m.path)
+			if err != nil {
+				log.Warnf("WARNING: %s: %v", m.path, err)
+				continue
+			}
+
+			if !strings.HasPrefix(mimetype, "image/") {
+				continue
+			}
+
+			if db != nil {
+				if err := db.Upsert(abspath, m.modTime, fp); err != nil {
+					log.Error("ERROR:", err)
+				}
+			}
+
+			fp, err := phash.ImageHashDCT(m.path)
+			if err != nil {
+				log.Warnf("WARNING: %s: %v", m.path, err)
+				continue
+			}
+
+			if fp == 0 {
+				log.Warnf("WARNING: %s: cannot compute fingerprint", m.path)
+				continue
+			}
+		}
+
+		out <- result{
+			fp:   fp,
+			path: m.path,
+		}
+	}
+
+	close(done)
+}
+
+func process(depth int, spinner *Spinner, work chan<- request) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
 		spinner.Spin(path)
 
@@ -89,52 +130,9 @@ func process(db *DB, depth int, spinner *Spinner, out chan<- result, hasher chan
 			return nil
 		}
 
-		var abspath string
-		var fp uint64
-		haveFP := false
-
-		if db != nil {
-			abspath, _ = filepath.Abs(path)
-			var err error
-			fp, haveFP, err = db.Get(abspath, info.ModTime())
-			if err != nil {
-				log.Error("ERROR:", err)
-			}
-		}
-
-		if !haveFP {
-			mimetype, err := magicmime.TypeByFile(path)
-			if err != nil {
-				log.Warnf("WARNING: %s: %v", path, err)
-				return nil
-			}
-
-			if !strings.HasPrefix(mimetype, "image/") {
-				return nil
-			}
-
-			done := func(fp uint64) {
-				if db != nil {
-					if err := db.Upsert(abspath, info.ModTime(), fp); err != nil {
-						log.Error("ERROR:", err)
-					}
-				}
-				out <- result{
-					fp:   fp,
-					path: path,
-				}
-			}
-			hasher <- request{
-				path: path,
-				done: done,
-			}
-
-			return nil
-		}
-
-		out <- result{
-			fp:   fp,
-			path: path,
+		work <- request{
+			path:    path,
+			modTime: info.ModTime(),
 		}
 
 		return nil
@@ -249,10 +247,6 @@ func main() {
 
 	spinner := NewSpinner()
 
-	if err := magicmime.Open(magicmime.MAGIC_MIME_TYPE | magicmime.MAGIC_SYMLINK | magicmime.MAGIC_ERROR); err != nil {
-		log.Fatal(err)
-	}
-
 	// Search for image files and compute hashes.
 	maxDepth := 1
 	if recurse {
@@ -262,25 +256,25 @@ func main() {
 
 	results := make(chan result)
 
-	hasher := make(chan request)
-	hashDone := make(chan chan struct{}, cores)
+	workC := make(chan request)
+	workDone := make(chan chan struct{}, cores)
 	for i := 0; i < cores; i++ {
 		done := make(chan struct{})
-		go hashWorker(hasher, results, done)
-		hashDone <- done
+		go worker(db, workC, results, done)
+		workDone <- done
 	}
-	close(hashDone)
+	close(workDone)
 
 	resultDone := make(chan struct{})
 	go resultWorker(m, results, resultDone)
 
 	for _, d := range flag.Args() {
-		walkFn := process(db, maxDepth, spinner, results, hasher)
+		walkFn := process(maxDepth, spinner, workC)
 		filepath.Walk(d, walkFn)
 	}
 
-	close(hasher)
-	for done := range hashDone {
+	close(workC)
+	for done := range workDone {
 		<-done
 	}
 	close(results)
