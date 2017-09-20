@@ -15,11 +15,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	stdlog "log"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -50,66 +52,80 @@ type request struct {
 	modTime time.Time
 }
 
-func worker(db *DB, in <-chan request, out chan<- result, done chan struct{}) {
+func worker(ctx context.Context, db *DB, in <-chan request, out chan<- result, done chan struct{}) {
+	defer close(done)
+
 	mm, err := magicmime.NewDecoder(magicmime.MAGIC_MIME_TYPE | magicmime.MAGIC_SYMLINK | magicmime.MAGIC_ERROR)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer mm.Close()
 
-	for m := range in {
-		var abspath string
-		var fp uint64
-		haveFP := false
-
-		if db != nil {
-			abspath, _ = filepath.Abs(m.path)
-			var err error
-			fp, haveFP, err = db.Get(abspath, m.modTime)
-			if err != nil {
-				log.Error("ERROR:", err)
-			}
-		}
-
-		if !haveFP {
-			mimetype, err := mm.TypeByFile(m.path)
-			if err != nil {
-				log.Warnf("WARNING: %s: %v", m.path, err)
-				continue
-			}
-
-			if !strings.HasPrefix(mimetype, "image/") {
-				continue
-			}
-
-			fp, err = phash.ImageHashDCT(m.path)
-			if err != nil {
-				log.Warnf("WARNING: %s: %v", m.path, err)
-				continue
-			}
-
-			if fp == 0 {
-				log.Warnf("WARNING: %s: cannot compute fingerprint", m.path)
-				continue
-			}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case m := <-in:
+			var abspath string
+			var fp uint64
+			haveFP := false
 
 			if db != nil {
-				if err := db.Upsert(abspath, m.modTime, fp); err != nil {
+				abspath, _ = filepath.Abs(m.path)
+				var err error
+				fp, haveFP, err = db.Get(ctx, abspath, m.modTime)
+				switch {
+				case err == context.Canceled:
+					return
+				case err != nil:
 					log.Error("ERROR:", err)
 				}
 			}
-		}
 
-		out <- result{
-			fp:   fp,
-			path: m.path,
+			if !haveFP {
+				mimetype, err := mm.TypeByFile(m.path)
+				if err != nil {
+					log.Warnf("WARNING: %s: %v", m.path, err)
+					continue
+				}
+
+				if !strings.HasPrefix(mimetype, "image/") {
+					continue
+				}
+
+				fp, err = phash.ImageHashDCT(m.path)
+				if err != nil {
+					log.Warnf("WARNING: %s: %v", m.path, err)
+					continue
+				}
+
+				if fp == 0 {
+					log.Warnf("WARNING: %s: cannot compute fingerprint", m.path)
+					continue
+				}
+
+				if db != nil {
+					err := db.Upsert(ctx, abspath, m.modTime, fp)
+					switch {
+					case err == context.Canceled:
+						return
+					case err != nil:
+						log.Error("ERROR:", err)
+					}
+				}
+			}
+
+			res := result{fp: fp, path: m.path}
+			select {
+			case <-ctx.Done():
+				return
+			case out <- res:
+			}
 		}
 	}
-
-	close(done)
 }
 
-func process(depth int, spinner *Spinner, work chan<- request) filepath.WalkFunc {
+func process(ctx context.Context, depth int, spinner *Spinner, work chan<- request) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
 		spinner.Spin(path)
 
@@ -130,9 +146,15 @@ func process(depth int, spinner *Spinner, work chan<- request) filepath.WalkFunc
 			return nil
 		}
 
-		work <- request{
+		req := request{
 			path:    path,
 			modTime: info.ModTime(),
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case work <- req:
 		}
 
 		return nil
@@ -221,6 +243,23 @@ func main() {
 		log.Fatal("--no-compare is useless without -f")
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt)
+
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-sig:
+			// Interrupt will not immediately exit the program,
+			// instead we signal to stop processing new data and
+			// allow the program to exit cleanly.
+			cancel()
+		}
+	}()
+
 	var db *DB
 	if dbPath != "" {
 		var err error
@@ -230,7 +269,11 @@ func main() {
 		}
 
 		if prune {
-			if err := db.Prune(); err != nil {
+			if err := db.Prune(ctx); err != nil {
+				db.Close()
+				if err == context.Canceled {
+					os.Exit(1)
+				}
 				log.Fatal(err)
 			}
 		}
@@ -261,7 +304,7 @@ func main() {
 	workDone := make(chan chan struct{}, jobs)
 	for i := 0; i < jobs; i++ {
 		done := make(chan struct{})
-		go worker(db, workC, results, done)
+		go worker(ctx, db, workC, results, done)
 		workDone <- done
 	}
 	close(workDone)
@@ -270,7 +313,7 @@ func main() {
 	go resultWorker(m, results, resultDone)
 
 	for _, d := range flag.Args() {
-		walkFn := process(maxDepth, spinner, workC)
+		walkFn := process(ctx, maxDepth, spinner, workC)
 		filepath.Walk(d, walkFn)
 	}
 
@@ -280,6 +323,21 @@ func main() {
 	}
 	close(results)
 	<-resultDone
+
+	err := db.Close()
+	if err != nil {
+		log.Errorf("Error closing DB: %v", err)
+	}
+
+	// Exit immediately if the program was interrupted.
+	select {
+	case <-ctx.Done():
+		os.Exit(1)
+	default:
+	}
+
+	signal.Stop(sig) // Stop handling interrupts gracefully.
+	cancel()         // Cleanup.
 
 	spinner.Stop()
 
