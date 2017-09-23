@@ -26,7 +26,6 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/opennota/phash"
 	"github.com/rakyll/magicmime"
@@ -49,7 +48,7 @@ func resultWorker(m map[uint64][]string, in <-chan result, done chan struct{}) {
 
 type request struct {
 	path    string
-	modTime time.Time
+	modTime int64
 }
 
 func worker(ctx context.Context, db *DB, in <-chan request, out chan<- result, done chan struct{}) {
@@ -99,11 +98,6 @@ func worker(ctx context.Context, db *DB, in <-chan request, out chan<- result, d
 					continue
 				}
 
-				if fp == 0 {
-					log.Warnf("WARNING: %s: cannot compute fingerprint", m.path)
-					continue
-				}
-
 				if db != nil {
 					err := db.Upsert(ctx, abspath, m.modTime, fp)
 					switch {
@@ -148,7 +142,7 @@ func process(ctx context.Context, depth int, spinner *Spinner, work chan<- reque
 
 		req := request{
 			path:    path,
-			modTime: info.ModTime(),
+			modTime: info.ModTime().UnixNano(),
 		}
 
 		select {

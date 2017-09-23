@@ -17,8 +17,8 @@ import (
 	"context"
 	"database/sql"
 	"os"
+	"strings"
 	"sync"
-	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/opennota/phash"
@@ -27,7 +27,7 @@ import (
 type entry struct {
 	path    string
 	fp      uint64
-	lastmod string
+	lastmod int64
 }
 
 type DB struct {
@@ -64,15 +64,10 @@ func OpenDatabase(dbpath string) (*DB, error) {
 	}, nil
 }
 
-func iso8601(t time.Time) string {
-	return t.Format("2006-01-02 15:04:05")
-}
-
-func (db *DB) Get(ctx context.Context, path string, modtime time.Time) (uint64, bool, error) {
-	lastmod := iso8601(modtime)
+func (db *DB) Get(ctx context.Context, path string, modtime int64) (uint64, bool, error) {
 	var fp int64
 	db.mu.RLock()
-	row := db.preparedGet.QueryRowContext(ctx, path, lastmod)
+	row := db.preparedGet.QueryRowContext(ctx, path, modtime)
 	err := row.Scan(&fp)
 	db.mu.RUnlock()
 	if err != nil {
@@ -85,10 +80,9 @@ func (db *DB) Get(ctx context.Context, path string, modtime time.Time) (uint64, 
 	return uint64(fp), true, nil
 }
 
-func (db *DB) Upsert(ctx context.Context, path string, modtime time.Time, fp uint64) error {
-	lastmod := iso8601(modtime)
+func (db *DB) Upsert(ctx context.Context, path string, modtime int64, fp uint64) error {
 	db.mu.Lock()
-	_, err := db.preparedUpsert.ExecContext(ctx, path, int64(fp), lastmod)
+	_, err := db.preparedUpsert.ExecContext(ctx, path, int64(fp), modtime)
 	db.mu.Unlock()
 	return err
 }
@@ -102,12 +96,15 @@ func (db *DB) Prune(ctx context.Context) error {
 
 	var path string
 	var fp int64
-	var tm time.Time
+	var lastmod int64
 	var toDelete []string
 	var toUpdate []entry
 	for rows.Next() {
-		if err := rows.Scan(&path, &fp, &tm); err != nil {
-			return err
+		if err := rows.Scan(&path, &fp, &lastmod); err != nil {
+			if !strings.Contains(err.Error(), "Scan error on column index 2") {
+				return err
+			}
+			fp, lastmod = 0, 0
 		}
 
 		fi, err := os.Stat(path)
@@ -120,15 +117,10 @@ func (db *DB) Prune(ctx context.Context) error {
 			continue
 		}
 
-		lastmod := iso8601(tm)
-		newlastmod := iso8601(fi.ModTime())
+		newlastmod := fi.ModTime().UnixNano()
 		if lastmod != newlastmod {
 			newfp, err := phash.ImageHashDCT(path)
 			if err != nil {
-				continue
-			}
-
-			if newfp == 0 {
 				continue
 			}
 
