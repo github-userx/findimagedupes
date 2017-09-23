@@ -12,6 +12,8 @@ which requires `libmagic`. Install it as follows:
 - RHEL, CentOS or Fedora: `yum install file-devel`
 - Mac OS X: `brew install libmagic`
 
+Other requirements: libjpeg, libpng, libtiff.
+
 Then
 
     go get -u github.com/opennota/findimagedupes
