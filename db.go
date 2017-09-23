@@ -14,6 +14,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"os"
 	"sync"
@@ -67,11 +68,11 @@ func iso8601(t time.Time) string {
 	return t.Format("2006-01-02 15:04:05")
 }
 
-func (db *DB) Get(path string, modtime time.Time) (uint64, bool, error) {
+func (db *DB) Get(ctx context.Context, path string, modtime time.Time) (uint64, bool, error) {
 	lastmod := iso8601(modtime)
 	var fp int64
 	db.mu.RLock()
-	row := db.preparedGet.QueryRow(path, lastmod)
+	row := db.preparedGet.QueryRowContext(ctx, path, lastmod)
 	err := row.Scan(&fp)
 	db.mu.RUnlock()
 	if err != nil {
@@ -84,16 +85,16 @@ func (db *DB) Get(path string, modtime time.Time) (uint64, bool, error) {
 	return uint64(fp), true, nil
 }
 
-func (db *DB) Upsert(path string, modtime time.Time, fp uint64) error {
+func (db *DB) Upsert(ctx context.Context, path string, modtime time.Time, fp uint64) error {
 	lastmod := iso8601(modtime)
 	db.mu.Lock()
-	_, err := db.preparedUpsert.Exec(path, int64(fp), lastmod)
+	_, err := db.preparedUpsert.ExecContext(ctx, path, int64(fp), lastmod)
 	db.mu.Unlock()
 	return err
 }
 
-func (db *DB) Prune() error {
-	rows, err := db.db.Query("SELECT path, fp, lastmod FROM fingerprints")
+func (db *DB) Prune(ctx context.Context) error {
+	rows, err := db.db.QueryContext(ctx, "SELECT path, fp, lastmod FROM fingerprints")
 	if err != nil {
 		return err
 	}
@@ -143,33 +144,33 @@ func (db *DB) Prune() error {
 		return nil
 	}
 
-	tx, err := db.db.Begin()
+	tx, err := db.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
 	if len(toDelete) > 0 {
-		stmt, err := tx.Prepare("DELETE FROM fingerprints WHERE path = ?")
+		stmt, err := tx.PrepareContext(ctx, "DELETE FROM fingerprints WHERE path = ?")
 		if err != nil {
 			return err
 		}
 
 		for _, path := range toDelete {
-			if _, err := stmt.Exec(path); err != nil {
+			if _, err := stmt.ExecContext(ctx, path); err != nil {
 				return err
 			}
 		}
 	}
 
 	if len(toUpdate) > 0 {
-		stmt, err := tx.Prepare("UPDATE fingerprints SET fp = ?, lastmod = ? WHERE path = ?")
+		stmt, err := tx.PrepareContext(ctx, "UPDATE fingerprints SET fp = ?, lastmod = ? WHERE path = ?")
 		if err != nil {
 			return err
 		}
 
 		for _, entry := range toUpdate {
-			if _, err := stmt.Exec(int64(entry.fp), entry.lastmod, entry.path); err != nil {
+			if _, err := stmt.ExecContext(ctx, int64(entry.fp), entry.lastmod, entry.path); err != nil {
 				return err
 			}
 		}
@@ -181,4 +182,8 @@ func (db *DB) Prune() error {
 	}
 
 	return nil
+}
+
+func (db *DB) Close() error {
+	return db.db.Close()
 }
