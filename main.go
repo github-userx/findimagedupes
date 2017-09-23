@@ -366,7 +366,7 @@ func main() {
 		}
 
 		// Produce repeatable output.
-		sort.Sort(sort.StringSlice(files))
+		sort.Strings(files)
 
 		if program == "" {
 			fmt.Println(strings.Join(files, " "))
