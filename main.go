@@ -318,9 +318,11 @@ func main() {
 	close(results)
 	<-resultDone
 
-	err := db.Close()
-	if err != nil {
-		log.Errorf("Error closing DB: %v", err)
+	if db != nil {
+		err := db.Close()
+		if err != nil {
+			log.Errorf("Error closing DB: %v", err)
+		}
 	}
 
 	// Exit immediately if the program was interrupted.
