@@ -64,7 +64,11 @@ func worker(ctx context.Context, db *DB, in <-chan request, out chan<- result, d
 		select {
 		case <-ctx.Done():
 			return
-		case m := <-in:
+		case m, open := <-in:
+			if !open {
+				return
+			}
+
 			var abspath string
 			var fp uint64
 			haveFP := false
