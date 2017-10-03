@@ -173,7 +173,7 @@ func main() {
 		jobs      int
 	)
 
-	defaultJobs := runtime.GOMAXPROCS(0)
+	defaultJobs := runtime.NumCPU()
 
 	flag.IntVar(&threshold, "t", 0, "Hamming distance threshold (0..64)")
 	flag.IntVar(&threshold, "threshold", 0, "")
