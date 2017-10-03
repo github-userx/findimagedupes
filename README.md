@@ -5,11 +5,18 @@ findimagedupes finds visually similar or duplicate images.
 
 # Install
 
-The requirements:
+The dependencies:
 
 - Debian or Ubuntu: `apt-get install libmagic-dev libjpeg-dev libpng-dev libtiff5-dev`
 - RHEL, CentOS or Fedora: `yum install file-devel libjpeg-devel libpng-devel libtiff-devel`
-- Mac OS X: `brew install libmagic libjpeg libpng libtiff`
+- Mac OS X:
+
+```
+brew install libmagic
+brew install libjpeg
+brew install libpng
+brew install libtiff
+```
 
 Then:
 
