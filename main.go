@@ -175,7 +175,7 @@ func main() {
 
 	defaultJobs := runtime.NumCPU()
 
-	flag.IntVar(&threshold, "t", 0, "Hamming distance threshold (0..64)")
+	flag.IntVar(&threshold, "t", 0, "Hamming distance threshold (0..63)")
 	flag.IntVar(&threshold, "threshold", 0, "")
 
 	flag.BoolVar(&recurse, "R", false, "Search for images recursively")
@@ -207,7 +207,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, `Usage: findimagedupes [options] [file...]
 
     Options:
-       -t, --threshold=AMOUNT         Use AMOUNT as threshold of similarity (0..64; default 0)
+       -t, --threshold=AMOUNT         Use AMOUNT as threshold of similarity (0..63; default 0)
        -R, --recurse                  Search recursively for images inside subdirectories
        -n, --no-compare               Don't look for duplicates
        -p, --program=PROGRAM          Launch PROGRAM (in foreground) to view each set of dupes
