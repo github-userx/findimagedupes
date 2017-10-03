@@ -3,22 +3,19 @@ findimagedupes [![License](http://img.shields.io/:license-gpl3-blue.svg)](http:/
 
 findimagedupes finds visually similar or duplicate images.
 
-# Installation
+# Install
 
-findimagedupes uses [rakyll/magicmime](https://github.com/rakyll/magicmime),
-which requires `libmagic`. Install it as follows:
+The requirements:
 
-- Debian or Ubuntu: `apt-get install libmagic-dev`
-- RHEL, CentOS or Fedora: `yum install file-devel`
-- Mac OS X: `brew install libmagic`
+- Debian or Ubuntu: `apt-get install libmagic-dev libjpeg-dev libpng-dev libtiff5-dev`
+- RHEL, CentOS or Fedora: `yum install file-devel libjpeg-devel libpng-devel libtiff-devel`
+- Mac OS X: `brew install libmagic libjpeg libpng libtiff`
 
-Other requirements: libjpeg, libpng, libtiff.
-
-Then
+Then:
 
     go get -u github.com/opennota/findimagedupes
 
-# Usage
+# Use
 
 Search for similar images in the `~/Images` directory:
 
