@@ -351,6 +351,7 @@ func main() {
 		for h := range m {
 			hashes = append(hashes, h)
 		}
+		sort.Slice(hashes, func(i, j int) bool { return hashes[i] < hashes[j] })
 		for i := 0; i < len(hashes)-1; i++ {
 			for j := i + 1; j < len(hashes); j++ {
 				h1 := hashes[i]
