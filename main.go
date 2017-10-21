@@ -345,13 +345,16 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Produce repeatable output.
+	hashes := make([]uint64, 0, len(m))
+	for h, files := range m {
+		hashes = append(hashes, h)
+		sort.Strings(files)
+	}
+	sort.Slice(hashes, func(i, j int) bool { return hashes[i] < hashes[j] })
+
 	// Find similar hashes.
 	if threshold > 0 {
-		hashes := make([]uint64, 0, len(m))
-		for h := range m {
-			hashes = append(hashes, h)
-		}
-		sort.Slice(hashes, func(i, j int) bool { return hashes[i] < hashes[j] })
 		for i := 0; i < len(hashes)-1; i++ {
 			for j := i + 1; j < len(hashes); j++ {
 				h1 := hashes[i]
@@ -367,13 +370,11 @@ func main() {
 	}
 
 	// Print or view duplicates.
-	for _, files := range m {
+	for _, h := range hashes {
+		files := m[h]
 		if len(files) < 2 {
 			continue
 		}
-
-		// Produce repeatable output.
-		sort.Strings(files)
 
 		if program == "" {
 			fmt.Println(strings.Join(files, " "))
