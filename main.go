@@ -376,6 +376,7 @@ func main() {
 			continue
 		}
 
+		sort.Strings(files)
 		if program == "" {
 			fmt.Println(strings.Join(files, " "))
 		} else {
