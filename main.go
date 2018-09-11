@@ -27,8 +27,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/opennota/phash"
 	"github.com/rakyll/magicmime"
+	"gitlab.com/opennota/phash"
 )
 
 var log quietVar

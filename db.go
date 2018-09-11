@@ -21,7 +21,7 @@ import (
 	"sync"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/opennota/phash"
+	"gitlab.com/opennota/phash"
 )
 
 type entry struct {

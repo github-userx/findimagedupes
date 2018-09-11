@@ -20,7 +20,7 @@ brew install libtiff
 
 Then:
 
-    go get -u github.com/opennota/findimagedupes
+    go get -u gitlab.com/opennota/findimagedupes
 
 # Use
 
