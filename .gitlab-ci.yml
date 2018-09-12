@@ -6,7 +6,7 @@ stages:
 
 before_script:
   - apt-get -qq update
-  - apt-get install -y libmagic-dev libpng-dev
+  - apt-get install -y libmagic-dev libpng-dev libjpeg-dev libtiff-dev
 
 build:
   stage: build
