@@ -1,4 +1,4 @@
-findimagedupes [![License](http://img.shields.io/:license-gpl3-blue.svg)](http://www.gnu.org/licenses/gpl-3.0.html) [![Build Status](https://travis-ci.org/opennota/findimagedupes.png?branch=master)](https://travis-ci.org/opennota/findimagedupes)
+findimagedupes [![License](http://img.shields.io/:license-gpl3-blue.svg)](http://www.gnu.org/licenses/gpl-3.0.html) [![Pipeline status](https://gitlab.com/opennota/findimagedupes/badges/master/pipeline.svg)](https://gitlab.com/opennota/findimagedupes/commits/master)
 ==============
 
 findimagedupes finds visually similar or duplicate images.
