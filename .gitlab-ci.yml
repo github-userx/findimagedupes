@@ -4,6 +4,10 @@ stages:
   - build
   - test
 
+before_install:
+  - apt-get -qq update
+  - apt-get install -y libmagic-dev
+
 build:
   stage: build
   script:
