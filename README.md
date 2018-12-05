@@ -5,6 +5,8 @@ findimagedupes finds visually similar or duplicate images.
 
 # Install
 
+You'll need Go 1.8 or newer.
+
 The dependencies:
 
 - Debian or Ubuntu: `apt-get install libmagic-dev libjpeg-dev libpng-dev libtiff5-dev`
