@@ -80,6 +80,26 @@ func (db *DB) Get(ctx context.Context, path string, modtime int64) (uint64, bool
 	return uint64(fp), true, nil
 }
 
+func (db *DB) GetAll(ctx context.Context) ([]entry, error) {
+	rows, err := db.db.QueryContext(ctx, "SELECT path, fp FROM fingerprints")
+	if err != nil {
+		return nil, err
+	}
+	var results []entry
+	for rows.Next() {
+		var path string
+		var fp int64
+		if err := rows.Scan(&path, &fp); err != nil {
+			return nil, err
+		}
+		results = append(results, entry{path: path, fp: uint64(fp)})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
 func (db *DB) Upsert(ctx context.Context, path string, modtime int64, fp uint64) error {
 	db.mu.Lock()
 	_, err := db.preparedUpsert.ExecContext(ctx, path, int64(fp), modtime)

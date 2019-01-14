@@ -31,7 +31,10 @@ import (
 	"gitlab.com/opennota/phash"
 )
 
-var log quietVar
+var (
+	log          quietVar
+	justCheckNew bool
+)
 
 type result struct {
 	fp   uint64
@@ -102,7 +105,7 @@ func worker(ctx context.Context, db *DB, in <-chan request, out chan<- result, d
 					continue
 				}
 
-				if db != nil {
+				if db != nil && !justCheckNew {
 					err := db.Upsert(ctx, abspath, m.modTime, fp)
 					switch {
 					case err == context.Canceled:
@@ -159,6 +162,15 @@ func process(ctx context.Context, depth int, spinner *Spinner, work chan<- reque
 	}
 }
 
+func appendUniq(a []string, s string) []string {
+	for _, v := range a {
+		if v == s {
+			return a
+		}
+	}
+	return append(a, s)
+}
+
 func main() {
 	stdlog.SetFlags(0)
 
@@ -203,6 +215,8 @@ func main() {
 	flag.Var(&log, "q", "Quiet mode (no warnings, if given once; no errors either, if given twice)")
 	flag.Var(&log, "quiet", "")
 
+	flag.BoolVar(&justCheckNew, "new", false, "Just check new files (those on the command line)")
+
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, `Usage: findimagedupes [options] [file...]
 
@@ -218,6 +232,9 @@ func main() {
        -j, --jobs                     Number of jobs to use for image processing (default %d)
        -q, --quiet                    If this option is given, warnings are not displayed; if it is
                                           given twice, non-fatal errors are not displayed either
+           --new                      Only look for duplicates of files specified on the command line;
+                                          matches are also sought in the fingerprint database, but
+                                          the new hashes aren't added to it.
 
        -h, --help                     Show this help
 
@@ -322,22 +339,20 @@ func main() {
 	close(results)
 	<-resultDone
 
-	if db != nil {
-		err := db.Close()
-		if err != nil {
-			log.Errorf("Error closing DB: %v", err)
-		}
-	}
-
 	// Exit immediately if the program was interrupted.
 	select {
 	case <-ctx.Done():
+		if db != nil {
+			err := db.Close()
+			if err != nil {
+				log.Errorf("Error closing DB: %v", err)
+			}
+		}
 		os.Exit(1)
 	default:
 	}
 
 	signal.Stop(sig) // Stop handling interrupts gracefully.
-	cancel()         // Cleanup.
 
 	spinner.Stop()
 
@@ -352,6 +367,36 @@ func main() {
 		sort.Strings(files)
 	}
 	sort.Slice(hashes, func(i, j int) bool { return hashes[i] < hashes[j] })
+
+	if db != nil {
+		if justCheckNew {
+			// Find duplicates for the files on the command line in the fingerprint database.
+			entries, err := db.GetAll(ctx)
+			if err != nil {
+				log.Errorf("Error: cannot get all fingerprints: %v", err)
+			} else {
+				for _, e := range entries {
+					h0 := e.fp
+					if _, ok := m[h0]; ok {
+						m[h0] = appendUniq(m[h0], e.path)
+					} else {
+						for _, h := range hashes {
+							d := phash.HammingDistance(h0, h)
+							if d <= threshold {
+								m[h] = append(m[h], e.path)
+								break
+							}
+						}
+					}
+				}
+			}
+		}
+
+		err := db.Close()
+		if err != nil {
+			log.Errorf("Error closing DB: %v", err)
+		}
+	}
 
 	// Find similar hashes.
 	if threshold > 0 {
