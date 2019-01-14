@@ -234,7 +234,7 @@ func main() {
                                           given twice, non-fatal errors are not displayed either
            --new                      Only look for duplicates of files specified on the command line;
                                           matches are also sought in the fingerprint database, but
-                                          the new hashes aren't added to it.
+                                          the new fingerprints aren't added to it.
 
        -h, --help                     Show this help
 
