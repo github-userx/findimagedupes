@@ -329,7 +329,9 @@ func main() {
 
 	for _, d := range flag.Args() {
 		walkFn := process(ctx, maxDepth, spinner, workC)
-		filepath.Walk(d, walkFn)
+		if err := filepath.Walk(d, walkFn); err != nil {
+			log.Error(err)
+		}
 	}
 
 	close(workC)

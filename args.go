@@ -25,16 +25,17 @@ func parseArgs(s string) (args []string) {
 		b := s[i]
 		switch b {
 		case '"', '\'':
-			if quoted {
+			switch {
+			case quoted:
 				if b == quote {
 					quoted = false
 				} else {
 					buf.WriteByte(b)
 				}
-			} else if canStartQuoted {
+			case canStartQuoted:
 				quoted = true
 				quote = b
-			} else {
+			default:
 				buf.WriteByte(b)
 			}
 		case ' ':
@@ -67,5 +68,5 @@ func parseArgs(s string) (args []string) {
 		args = append(args, buf.String())
 	}
 
-	return
+	return args
 }

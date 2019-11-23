@@ -160,7 +160,9 @@ func (db *DB) Prune(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	if len(toDelete) > 0 {
 		stmt, err := tx.PrepareContext(ctx, "DELETE FROM fingerprints WHERE path = ?")
