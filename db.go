@@ -43,7 +43,7 @@ func OpenDatabase(dbpath string) (*DB, error) {
 		return nil, err
 	}
 
-	if _, err := db.Exec("CREATE TABLE IF NOT EXISTS fingerprints (path TEXT PRIMARY KEY, fp INTEGER, lastmod DATETIME)"); err != nil {
+	if _, err := db.Exec("CREATE TABLE IF NOT EXISTS fingerprints (path TEXT PRIMARY KEY, fp INTEGER, lastmod INTEGER)"); err != nil {
 		return nil, err
 	}
 
