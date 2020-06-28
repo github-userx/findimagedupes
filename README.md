@@ -18,6 +18,7 @@ brew install libmagic
 brew install libjpeg
 brew install libpng
 brew install libtiff
+brew install dcraw
 ```
 
 Then:
