@@ -9,8 +9,8 @@ You'll need Go 1.8 or newer.
 
 The dependencies:
 
-- Debian or Ubuntu: `apt-get install libmagic-dev libjpeg-dev libpng-dev libtiff5-dev`
-- RHEL, CentOS or Fedora: `yum install file-devel libjpeg-devel libpng-devel libtiff-devel`
+- Debian or Ubuntu: `apt-get install libmagic-dev libjpeg-dev libpng-dev libtiff5-dev libheif-dev`
+- RHEL, CentOS or Fedora: `yum install file-devel libjpeg-devel libpng-devel libtiff-devel libheif-devel`
 - Mac OS X:
 
 ```
@@ -19,6 +19,7 @@ brew install libjpeg
 brew install libpng
 brew install libtiff
 brew install dcraw
+brew install libheif
 ```
 
 Then:
