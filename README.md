@@ -5,8 +5,6 @@ findimagedupes finds visually similar or duplicate images.
 
 # Install
 
-You'll need Go 1.8 or newer.
-
 The dependencies:
 
 - Debian or Ubuntu: `apt-get install libmagic-dev libjpeg-dev libpng-dev libtiff5-dev libheif-dev`
@@ -24,7 +22,7 @@ brew install libheif
 
 Then:
 
-    go get -u gitlab.com/opennota/findimagedupes
+    go install gitlab.com/opennota/findimagedupes@latest
 
 # Use
 
