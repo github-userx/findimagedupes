@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/rakyll/magicmime"
@@ -39,6 +40,19 @@ var (
 type result struct {
 	fp   uint64
 	path string
+}
+
+type quotedString string
+
+func (q quotedString) String() string { return string(q) }
+
+func (q *quotedString) Set(val string) error {
+	p, err := strconv.Unquote(`"` + val + `"`)
+	if err != nil {
+		return fmt.Errorf("failed to decode quoted string: %w", err)
+	}
+	*q = quotedString(p)
+	return nil
 }
 
 func resultWorker(m map[uint64][]string, in <-chan result, done chan struct{}) {
@@ -183,6 +197,7 @@ func main() {
 		dbPath    string
 		prune     bool
 		jobs      int
+		delim     quotedString = " "
 	)
 
 	defaultJobs := runtime.NumCPU()
@@ -212,6 +227,9 @@ func main() {
 	flag.IntVar(&jobs, "j", defaultJobs, "Number of jobs to use for image processing")
 	flag.IntVar(&jobs, "jobs", defaultJobs, "")
 
+	flag.Var(&delim, "d", "The delimiter to use when printing to stdout")
+	flag.Var(&delim, "delimiter", "")
+
 	flag.Var(&log, "q", "Quiet mode (no warnings, if given once; no errors either, if given twice)")
 	flag.Var(&log, "quiet", "")
 
@@ -230,6 +248,8 @@ func main() {
        -f, --fingerprints=FILE        Use FILE as fingerprint database
        -P, --prune                    Remove fingerprint data for images that do not exist any more
        -j, --jobs                     Number of jobs to use for image processing (default %d)
+       -d, --delimiter                The delimiter to use when printing to stdout (default SPACE);
+                                          use \000 for NULL byte or \x09 for TAB.
        -q, --quiet                    If this option is given, warnings are not displayed; if it is
                                           given twice, non-fatal errors are not displayed either
            --new                      Only look for duplicates of files specified on the command line;
@@ -425,7 +445,7 @@ func main() {
 
 		sort.Strings(files)
 		if program == "" {
-			fmt.Println(strings.Join(files, " "))
+			fmt.Println(strings.Join(files, string(delim)))
 		} else {
 			args := append(programArgs, files...)
 			cmd := exec.Command(program, args...)
