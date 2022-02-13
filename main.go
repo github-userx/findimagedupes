@@ -192,6 +192,17 @@ func appendUniq(a []string, s string) []string {
 	return append(a, s)
 }
 
+type arrayStringFlags []string
+
+func (i *arrayStringFlags) String() string {
+	return "my string representation"
+}
+
+func (i *arrayStringFlags) Set(value string) error {
+	*i = append(*i, value)
+	return nil
+}
+
 func main() {
 	stdlog.SetFlags(0)
 
@@ -205,7 +216,7 @@ func main() {
 		prune     bool
 		jobs      int
 		delim     quotedString = " "
-		exclude   string
+		excludes  arrayStringFlags
 	)
 
 	defaultJobs := runtime.NumCPU()
@@ -243,8 +254,8 @@ func main() {
 
 	flag.BoolVar(&justCheckNew, "new", false, "Just check new files (those on the command line)")
 
-	flag.StringVar(&exclude, "e", "", "Exclude any files/directories that contain this regexp")
-	flag.StringVar(&exclude, "exclude", "", "")
+	flag.Var(&excludes, "e", "Exclude any files/directories that contain this regexp")
+	flag.Var(&excludes, "exclude", "")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, `Usage: findimagedupes [options] [file...]
@@ -290,9 +301,8 @@ func main() {
 		log.Fatal("--no-compare is useless without -f")
 	}
 
-	// TODO: Allow multiple regexps?
 	excludeRegexps := make([]*regexp.Regexp, 0, 1)
-	if exclude != "" {
+	for _, exclude := range excludes {
 		excludeRegexp, err := regexp.Compile(exclude)
 		if err != nil {
 			log.Fatalf("Error: invalid exclude regexp '%v': %v", exclude, err)
