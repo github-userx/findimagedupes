@@ -305,7 +305,7 @@ func main() {
 	for _, exclude := range excludes {
 		excludeRegexp, err := regexp.Compile(exclude)
 		if err != nil {
-			log.Fatalf("Error: invalid exclude regexp '%v': %v", exclude, err)
+			log.Fatalf("ERROR: bad exclude: %v", err)
 		}
 		excludeRegexps = append(excludeRegexps, excludeRegexp)
 	}
