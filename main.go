@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -140,7 +141,7 @@ func worker(ctx context.Context, db *DB, in <-chan request, out chan<- result, d
 	}
 }
 
-func process(ctx context.Context, depth int, spinner *Spinner, work chan<- request) filepath.WalkFunc {
+func process(ctx context.Context, depth int, excludeRegexps []*regexp.Regexp, spinner *Spinner, work chan<- request) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
 		spinner.Spin(path)
 
@@ -159,6 +160,12 @@ func process(ctx context.Context, depth int, spinner *Spinner, work chan<- reque
 				}
 			}
 			return nil
+		}
+
+		for _, excludeRegexp := range excludeRegexps {
+			if excludeRegexp.MatchString(path) {
+				return nil
+			}
 		}
 
 		req := request{
@@ -198,6 +205,7 @@ func main() {
 		prune     bool
 		jobs      int
 		delim     quotedString = " "
+		exclude   string
 	)
 
 	defaultJobs := runtime.NumCPU()
@@ -235,6 +243,9 @@ func main() {
 
 	flag.BoolVar(&justCheckNew, "new", false, "Just check new files (those on the command line)")
 
+	flag.StringVar(&exclude, "e", "", "Exclude any files/directories that contain this regexp")
+	flag.StringVar(&exclude, "exclude", "", "")
+
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, `Usage: findimagedupes [options] [file...]
 
@@ -255,6 +266,7 @@ func main() {
            --new                      Only look for duplicates of files specified on the command line;
                                           matches are also sought in the fingerprint database, but
                                           the new fingerprints aren't added to it.
+       -e, --exclude                  Exclude any files/directories that contain this regexp
 
        -h, --help                     Show this help
 
@@ -276,6 +288,16 @@ func main() {
 
 	if noCompare && dbPath == "" {
 		log.Fatal("--no-compare is useless without -f")
+	}
+
+	// TODO: Allow multiple regexps?
+	excludeRegexps := make([]*regexp.Regexp, 0, 1)
+	if exclude != "" {
+		excludeRegexp, err := regexp.Compile(exclude)
+		if err != nil {
+			log.Fatalf("Error: invalid exclude regexp '%v': %v", exclude, err)
+		}
+		excludeRegexps = append(excludeRegexps, excludeRegexp)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -348,7 +370,7 @@ func main() {
 	go resultWorker(m, results, resultDone)
 
 	for _, d := range flag.Args() {
-		walkFn := process(ctx, maxDepth, spinner, workC)
+		walkFn := process(ctx, maxDepth, excludeRegexps, spinner, workC)
 		if err := filepath.Walk(d, walkFn); err != nil {
 			log.Error(err)
 		}
