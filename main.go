@@ -192,14 +192,22 @@ func appendUniq(a []string, s string) []string {
 	return append(a, s)
 }
 
-type arrayStringFlags []string
+type regexpListFlags []*regexp.Regexp
 
-func (i *arrayStringFlags) String() string {
-	return "my string representation"
+func (f *regexpListFlags) String() string {
+	var stringRep []string
+	for _, r := range *f {
+		stringRep = append(stringRep, r.String())
+	}
+	return strings.Join(stringRep, " ")
 }
 
-func (i *arrayStringFlags) Set(value string) error {
-	*i = append(*i, value)
+func (f *regexpListFlags) Set(value string) error {
+	r, err := regexp.Compile(value)
+	if err != nil {
+		return err
+	}
+	*f = append(*f, r)
 	return nil
 }
 
@@ -216,7 +224,7 @@ func main() {
 		prune     bool
 		jobs      int
 		delim     quotedString = " "
-		excludes  arrayStringFlags
+		excludes  regexpListFlags
 	)
 
 	defaultJobs := runtime.NumCPU()
@@ -301,15 +309,6 @@ func main() {
 		log.Fatal("--no-compare is useless without -f")
 	}
 
-	excludeRegexps := make([]*regexp.Regexp, 0, 1)
-	for _, exclude := range excludes {
-		excludeRegexp, err := regexp.Compile(exclude)
-		if err != nil {
-			log.Fatalf("ERROR: bad exclude: %v", err)
-		}
-		excludeRegexps = append(excludeRegexps, excludeRegexp)
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -380,7 +379,7 @@ func main() {
 	go resultWorker(m, results, resultDone)
 
 	for _, d := range flag.Args() {
-		walkFn := process(ctx, maxDepth, excludeRegexps, spinner, workC)
+		walkFn := process(ctx, maxDepth, excludes, spinner, workC)
 		if err := filepath.Walk(d, walkFn); err != nil {
 			log.Error(err)
 		}
