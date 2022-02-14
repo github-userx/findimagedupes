@@ -74,7 +74,7 @@ func worker(ctx context.Context, db *DB, in <-chan request, out chan<- result, d
 
 	mm, err := magicmime.NewDecoder(magicmime.MAGIC_MIME_TYPE | magicmime.MAGIC_SYMLINK | magicmime.MAGIC_ERROR)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	defer mm.Close()
 
@@ -195,7 +195,7 @@ func appendUniq(a []string, s string) []string {
 type regexpListFlags []*regexp.Regexp
 
 func (f *regexpListFlags) String() string {
-	var stringRep []string
+	stringRep := make([]string, 0, len(*f))
 	for _, r := range *f {
 		stringRep = append(stringRep, r.String())
 	}
@@ -331,14 +331,14 @@ func main() {
 		var err error
 		db, err = OpenDatabase(dbPath)
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 
 		if prune {
 			if err := db.Prune(ctx); err != nil {
 				db.Close()
 				if err == context.Canceled {
-					os.Exit(1)
+					os.Exit(1) //nolint:gocritic
 				}
 				log.Fatal(err)
 			}
@@ -476,9 +476,9 @@ func main() {
 
 		sort.Strings(files)
 		if program == "" {
-			fmt.Println(strings.Join(files, string(delim)))
+			fmt.Println(strings.Join(files, string(delim))) //nolint:forbidigo
 		} else {
-			args := append(programArgs, files...)
+			args := append(programArgs, files...) //nolint:gocritic
 			cmd := exec.Command(program, args...)
 			cmd.Stderr = os.Stderr
 			err := cmd.Run()

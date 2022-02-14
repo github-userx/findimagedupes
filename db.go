@@ -47,12 +47,12 @@ func OpenDatabase(dbpath string) (*DB, error) {
 		return nil, err
 	}
 
-	get, err := db.Prepare("SELECT fp FROM fingerprints WHERE path = ? AND lastmod = ?")
+	get, err := db.Prepare("SELECT fp FROM fingerprints WHERE path = ? AND lastmod = ?") //nolint:sqlclosecheck
 	if err != nil {
 		return nil, err
 	}
 
-	upsert, err := db.Prepare("INSERT OR REPLACE INTO fingerprints (path, fp, lastmod) VALUES (?, ?, ?)")
+	upsert, err := db.Prepare("INSERT OR REPLACE INTO fingerprints (path, fp, lastmod) VALUES (?, ?, ?)") //nolint:sqlclosecheck
 	if err != nil {
 		return nil, err
 	}
@@ -85,6 +85,8 @@ func (db *DB) GetAll(ctx context.Context) ([]entry, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
+
 	var results []entry
 	for rows.Next() {
 		var path string
@@ -169,6 +171,7 @@ func (db *DB) Prune(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		defer stmt.Close()
 
 		for _, path := range toDelete {
 			if _, err := stmt.ExecContext(ctx, path); err != nil {
@@ -182,6 +185,7 @@ func (db *DB) Prune(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		defer stmt.Close()
 
 		for _, entry := range toUpdate {
 			if _, err := stmt.ExecContext(ctx, int64(entry.fp), entry.lastmod, entry.path); err != nil {
@@ -199,5 +203,7 @@ func (db *DB) Prune(ctx context.Context) error {
 }
 
 func (db *DB) Close() error {
+	_ = db.preparedGet.Close()
+	_ = db.preparedUpsert.Close()
 	return db.db.Close()
 }
