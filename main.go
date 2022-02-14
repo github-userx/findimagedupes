@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -73,7 +74,7 @@ func worker(ctx context.Context, db *DB, in <-chan request, out chan<- result, d
 
 	mm, err := magicmime.NewDecoder(magicmime.MAGIC_MIME_TYPE | magicmime.MAGIC_SYMLINK | magicmime.MAGIC_ERROR)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	defer mm.Close()
 
@@ -140,7 +141,7 @@ func worker(ctx context.Context, db *DB, in <-chan request, out chan<- result, d
 	}
 }
 
-func process(ctx context.Context, depth int, spinner *Spinner, work chan<- request) filepath.WalkFunc {
+func process(ctx context.Context, depth int, excludeRegexps []*regexp.Regexp, spinner *Spinner, work chan<- request) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
 		spinner.Spin(path)
 
@@ -159,6 +160,12 @@ func process(ctx context.Context, depth int, spinner *Spinner, work chan<- reque
 				}
 			}
 			return nil
+		}
+
+		for _, excludeRegexp := range excludeRegexps {
+			if excludeRegexp.MatchString(path) {
+				return nil
+			}
 		}
 
 		req := request{
@@ -185,6 +192,25 @@ func appendUniq(a []string, s string) []string {
 	return append(a, s)
 }
 
+type regexpListFlags []*regexp.Regexp
+
+func (f *regexpListFlags) String() string {
+	stringRep := make([]string, 0, len(*f))
+	for _, r := range *f {
+		stringRep = append(stringRep, r.String())
+	}
+	return strings.Join(stringRep, " ")
+}
+
+func (f *regexpListFlags) Set(value string) error {
+	r, err := regexp.Compile(value)
+	if err != nil {
+		return err
+	}
+	*f = append(*f, r)
+	return nil
+}
+
 func main() {
 	stdlog.SetFlags(0)
 
@@ -198,6 +224,7 @@ func main() {
 		prune     bool
 		jobs      int
 		delim     quotedString = " "
+		excludes  regexpListFlags
 	)
 
 	defaultJobs := runtime.NumCPU()
@@ -235,6 +262,9 @@ func main() {
 
 	flag.BoolVar(&justCheckNew, "new", false, "Just check new files (those on the command line)")
 
+	flag.Var(&excludes, "e", "Exclude any files/directories that contain this regexp")
+	flag.Var(&excludes, "exclude", "")
+
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, `Usage: findimagedupes [options] [file...]
 
@@ -255,6 +285,7 @@ func main() {
            --new                      Only look for duplicates of files specified on the command line;
                                           matches are also sought in the fingerprint database, but
                                           the new fingerprints aren't added to it.
+       -e, --exclude                  Exclude any files/directories that contain this regexp
 
        -h, --help                     Show this help
 
@@ -300,14 +331,14 @@ func main() {
 		var err error
 		db, err = OpenDatabase(dbPath)
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 
 		if prune {
 			if err := db.Prune(ctx); err != nil {
 				db.Close()
 				if err == context.Canceled {
-					os.Exit(1)
+					os.Exit(1) //nolint:gocritic
 				}
 				log.Fatal(err)
 			}
@@ -348,7 +379,7 @@ func main() {
 	go resultWorker(m, results, resultDone)
 
 	for _, d := range flag.Args() {
-		walkFn := process(ctx, maxDepth, spinner, workC)
+		walkFn := process(ctx, maxDepth, excludes, spinner, workC)
 		if err := filepath.Walk(d, walkFn); err != nil {
 			log.Error(err)
 		}
@@ -445,9 +476,9 @@ func main() {
 
 		sort.Strings(files)
 		if program == "" {
-			fmt.Println(strings.Join(files, string(delim)))
+			fmt.Println(strings.Join(files, string(delim))) //nolint:forbidigo
 		} else {
-			args := append(programArgs, files...)
+			args := append(programArgs, files...) //nolint:gocritic
 			cmd := exec.Command(program, args...)
 			cmd.Stderr = os.Stderr
 			err := cmd.Run()
