@@ -453,16 +453,38 @@ func main() {
 
 	// Find similar hashes.
 	if threshold > 0 {
+		// Use union-find to group hashes.
+		parent := make([]int, len(hashes))
+		for i := range parent {
+			parent[i] = i
+		}
+		var find func(int) int
+		find = func(i int) int {
+			if i != parent[i] {
+				parent[i] = find(parent[i])
+			}
+			return parent[i]
+		}
+
 		for i := 0; i < len(hashes)-1; i++ {
 			for j := i + 1; j < len(hashes); j++ {
 				h1 := hashes[i]
 				h2 := hashes[j]
 
 				d := phash.HammingDistance(h1, h2)
-				if d <= threshold {
-					m[h1] = append(m[h1], m[h2]...)
-					delete(m, h2)
+				if d > threshold {
+					continue
 				}
+
+				p1, p2 := find(i), find(j)
+				if p1 == p2 {
+					continue
+				}
+
+				parent[p2] = p1
+				h1p, h2p := hashes[p1], hashes[p2]
+				m[h1p] = append(m[h1p], m[h2p]...)
+				delete(m, h2p)
 			}
 		}
 	}

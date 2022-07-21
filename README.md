@@ -40,6 +40,12 @@ The same but use [feh](https://feh.finalrewind.org/) to display the duplicates.
 
 If no arguments are specified, findimagedupes will print all the available arguments and their default values.
 
+# Donate
+
+**Bitcoin (BTC):** `1PEaahXKwJvNJGJa2PXtPFLNYYigmdLXct`
+
+**Ethereum (ETH):** `0x83e9607E693467Cb344244Df10f66c036eC3Dc53`
+
 # Also
 
 There is a [Perl script](http://www.jhnc.org/findimagedupes/) by that name, which uses a different hashing algorithm.
